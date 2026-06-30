@@ -6,7 +6,6 @@
 <title>PCB Helmholtz Coil Designer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#14110d;
@@ -53,7 +52,7 @@
     margin:0 0 6px;
     letter-spacing:-.01em;
   }
-  .sub{color:var(--text-dim);font-size:14px;max-width:640px;line-height:1.5;}
+  .sub{color:var(--text-dim);font-size:14px;max-width:680px;line-height:1.5;}
 
   .layout{
     display:grid;
@@ -78,6 +77,7 @@
     color:var(--text-dim);
     margin:0 0 16px;
     font-weight:600;
+    display:flex; align-items:center; justify-content:space-between;
   }
 
   .field{margin-bottom:18px;}
@@ -111,6 +111,13 @@
   input[type=range]::-moz-range-thumb{
     width:13px;height:13px;border-radius:50%;
     background:var(--accent-bright);border:2px solid var(--bg);cursor:pointer;
+  }
+  input[type=range]:disabled{opacity:.45;}
+
+  input[type=number]{
+    background:var(--bg-input); border:1px solid var(--border);
+    color:var(--text); border-radius:7px; padding:5px 8px;
+    font-family:'JetBrains Mono',monospace; font-size:12.5px; width:70px;
   }
 
   .shape-toggle{display:flex;gap:8px;}
@@ -146,9 +153,21 @@
   .checkrow{
     display:flex;align-items:center;gap:9px;
     font-size:12.5px;color:var(--text-dim);cursor:pointer;
-    margin-bottom:14px;
+    margin-bottom:10px;
   }
   .checkrow input{accent-color:var(--accent);width:14px;height:14px;}
+
+  .ipc-box{
+    background:var(--bg-input);
+    border:1px solid var(--border-soft);
+    border-radius:9px;
+    padding:10px 12px;
+    font-size:11.5px;
+    color:var(--text-dim);
+    line-height:1.7;
+    margin-bottom:14px;
+  }
+  .ipc-box b{color:var(--accent-bright);font-family:'JetBrains Mono',monospace;font-weight:500;}
 
   /* Output area */
   .stat-grid{
@@ -194,8 +213,30 @@
   .geo-stats{font-size:12.5px;color:var(--text-dim);line-height:1.9;}
   .geo-stats b{color:var(--text);font-family:'JetBrains Mono',monospace;font-weight:500;}
 
-  .chart-wrap{height:280px;margin-top:6px;}
+  .chart-wrap{height:260px;margin-top:6px;}
   .legend-note{font-size:11px;color:var(--text-faint);margin-top:10px;line-height:1.5;}
+
+  .tol-input{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;}
+
+  #canvas3dWrap{position:relative;}
+  #canvas3d{
+    width:100%; height:420px; display:block;
+    background:radial-gradient(ellipse at 50% 30%, #1d1812 0%, #14110d 100%);
+    border-radius:10px; border:1px solid var(--border-soft);
+    cursor:grab; touch-action:none;
+  }
+  #canvas3d:active{cursor:grabbing;}
+  .legend3d{
+    position:absolute; right:14px; top:14px;
+    background:rgba(27,22,16,.85); border:1px solid var(--border-soft);
+    border-radius:8px; padding:8px 10px; font-size:10.5px; color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace; line-height:1.6; pointer-events:none;
+  }
+  .drag-hint{
+    position:absolute; left:14px; bottom:12px;
+    font-size:10.5px; color:var(--text-faint); font-family:'JetBrains Mono',monospace;
+    pointer-events:none;
+  }
 
   .warn-banner{
     background:rgba(210,162,74,.1);
@@ -215,7 +256,7 @@
   <header>
     <div class="eyebrow">Ground-test ACS calibration rig</div>
     <h1>PCB Helmholtz Coil Designer</h1>
-    <div class="sub">Tune the trace layout and stack geometry on the left — field strength, uniformity, resistance, and drive power recompute live from a validated 3D Biot-Savart solve over the actual winding pattern.</div>
+    <div class="sub">Tune the trace layout and stack geometry on the left — field strength, uniformity, resistance, and drive power recompute live from a validated 3D Biot-Savart solve over the actual winding pattern. Trace current limits follow IPC-2221.</div>
   </header>
 
   <div class="layout">
@@ -234,23 +275,35 @@
 
         <div class="field">
           <div class="field-label"><span>PCB outer size</span><span class="val" id="vPcbSize"></span></div>
-          <input type="range" id="pcbSize" min="50" max="400" step="1" value="200">
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="range" id="pcbSize" min="50" max="800" step="1" value="200" style="flex:1;">
+            <input type="number" id="pcbSizeNum" min="50" max="800" step="1" value="200" style="width:60px;" onchange="setPcbSizeFromNum()">
+          </div>
         </div>
 
         <div class="field">
           <div class="field-label"><span>Winding (donut) width</span><span class="val" id="vDonut"></span></div>
-          <input type="range" id="donutWidth" min="5" max="195" step="1" value="60">
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="range" id="donutWidth" min="5" max="390" step="1" value="60" style="flex:1;">
+            <input type="number" id="donutWidthNum" min="5" max="390" step="1" value="60" style="width:60px;" onchange="setDonutWidthFromNum()">
+          </div>
           <div class="field-hint">Radial width of the spiral ring — board can have an open/unwound center.</div>
         </div>
 
         <div class="field">
           <div class="field-label"><span>Trace width</span><span class="val" id="vTraceW"></span></div>
-          <input type="range" id="traceWidth" min="0.1" max="3" step="0.05" value="0.8">
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="range" id="traceWidth" min="0.1" max="6" step="0.05" value="0.8" style="flex:1;">
+            <input type="number" id="traceWidthNum" min="0.1" max="6" step="0.05" value="0.8" style="width:60px;" onchange="setTraceWidthFromNum()">
+          </div>
         </div>
 
         <div class="field">
           <div class="field-label"><span>Clearance</span><span class="val" id="vClear"></span></div>
-          <input type="range" id="clearance" min="0.1" max="3" step="0.05" value="0.3">
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="range" id="clearance" min="0.1" max="6" step="0.05" value="0.3" style="flex:1;">
+            <input type="number" id="clearanceNum" min="0.1" max="6" step="0.05" value="0.3" style="width:60px;" onchange="setClearanceFromNum()">
+          </div>
           <div class="field-hint">Track-to-track gap, also used as the outer-trace-to-board-edge clearance.</div>
         </div>
       </div>
@@ -279,26 +332,46 @@
         </div>
 
         <div class="field">
-          <label class="checkrow">
-            <input type="checkbox" id="autoSep" checked>
-            Use ideal Helmholtz separation
-          </label>
+          <div class="field-label">Coil separation mode</div>
+          <select id="sepMode" onchange="setSepMode(this.value)" style="width:100%;padding:7px 9px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:7px;font-size:12px;cursor:pointer;margin-bottom:8px;">
+            <option value="ideal">Ideal Helmholtz (flattest near center)</option>
+            <option value="maxstab">Max stability (4th-order null)</option>
+            <option value="manual">Manual</option>
+          </select>
           <div class="field-label"><span>Separation between the two coils</span><span class="val" id="vSep"></span></div>
-          <input type="range" id="separation" min="10" max="500" step="1" value="150" disabled>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="range" id="separation" min="10" max="1000" step="1" value="150" disabled style="flex:1;">
+            <input type="number" id="sepNum" min="10" max="1000" step="1" value="150" style="width:60px;" onchange="setSepFromNum()">
+          </div>
         </div>
       </div>
 
       <div class="panel">
-        <h2>Drive & test volume</h2>
+        <h2>Drive current</h2>
+
+        <label class="checkrow">
+          <input type="checkbox" id="autoCurrent" checked>
+          Use viable best (max) current
+        </label>
+        <div class="ipc-box" id="ipcBox">–</div>
 
         <div class="field">
           <div class="field-label"><span>Drive current</span><span class="val" id="vCurrent"></span></div>
-          <input type="range" id="current" min="0.01" max="5" step="0.01" value="0.5">
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="range" id="current" min="0.01" max="10" step="0.01" value="0.5" disabled style="flex:1;">
+            <input type="number" id="currentNum" min="0.01" max="10" step="0.01" value="0.5" style="width:60px;" onchange="setCurrentFromNum()" disabled>
+          </div>
         </div>
+      </div>
 
+      <div class="panel">
+        <h2>Test volume</h2>
         <div class="field">
           <div class="field-label"><span>Test volume (cube edge)</span><span class="val" id="vTestVol"></span></div>
-          <input type="range" id="testVolume" min="10" max="300" step="1" value="80">
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="range" id="testVolume" min="10" max="600" step="1" value="80" style="flex:1;">
+            <input type="number" id="testVolNum" min="10" max="600" step="1" value="80" style="width:60px;" onchange="setTestVolFromNum()">
+          </div>
           <div class="field-hint">e.g. your CubeSat envelope, centered between the two coils.</div>
         </div>
       </div>
@@ -338,9 +411,22 @@
       </div>
 
       <div class="panel">
-        <h2>Field profile</h2>
-        <div class="chart-wrap"><canvas id="chart"></canvas></div>
+        <h2>Field profile (1D)</h2>
+        <div class="chart-wrap"><canvas id="chart" style="width:100%;height:100%;display:block;"></canvas></div>
         <div class="legend-note">Both curves are single-axis sweeps through the coil center — transverse (x) is identical to y by symmetry, so only one is shown. Shaded band marks the test-volume half-width.</div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          Uniformity — 3D map
+          <span class="tol-input">tolerance band ±<input type="number" id="tolPct" value="5" min="0.1" max="50" step="0.1"> %</span>
+        </h2>
+        <div id="canvas3dWrap">
+          <canvas id="canvas3d"></canvas>
+          <div class="legend3d" id="legend3d">–</div>
+          <div class="drag-hint">drag to rotate</div>
+        </div>
+        <div class="legend-note">Height = field deviation from center (%) across the transverse plane through the coil center. Dashed outlines mark the ± tolerance band you set above — where the surface pokes outside them, that part of your test volume is out of spec.</div>
       </div>
     </div>
   </div>
@@ -396,10 +482,11 @@ function loopFieldAt(loopPts,I,P){
   return [bx,by,bz];
 }
 
+// loops: array of {points, mult} where mult folds in identical-z layer repeats (superposition is linear in current)
 function fieldAtAll(loops,I,P){
   let bx=0,by=0,bz=0;
   for(const lp of loops){
-    const b = loopFieldAt(lp,I,P);
+    const b = loopFieldAt(lp.points, I*lp.mult, P);
     bx+=b[0]; by+=b[1]; bz+=b[2];
   }
   return [bx,by,bz];
@@ -426,6 +513,32 @@ function perimeter_mm(shape,size_mm){
   return shape==='square' ? 4*size_mm : 2*Math.PI*size_mm;
 }
 
+/* ============================== IPC-2221 TRACE CURRENT ==============================
+   I = k * dT^0.44 * A^0.725   (A in mil^2, dT in C, k=0.048 external / 0.024 internal)
+   Validated: 1mm/1oz external @ 10C -> 2.39A ; 1mm/0.5oz internal @ 10C -> 0.72A (typical PCB-calc range)
+======================================================================================= */
+const IPC_DELTA_T = 10;       // deg C target temperature rise (conservative, continuous-duty)
+const IPC_SAFETY_FRACTION = 0.65; // derate the IPC rating for repeated lab use / margin
+
+function ipcMaxCurrent(traceWidth_mm, thickness_oz, isExternal){
+  const width_mil = traceWidth_mm/0.0254;
+  const thickness_mil = thickness_oz*1.378;
+  const A = width_mil*thickness_mil;
+  const k = isExternal?0.048:0.024;
+  return k*Math.pow(IPC_DELTA_T,0.44)*Math.pow(A,0.725);
+}
+
+function recommendedCurrent(traceWidth_mm, numLayers){
+  const ozArr = layerThicknesses(numLayers);
+  let minI = Infinity;
+  ozArr.forEach((oz,i)=>{
+    const isExternal = (i===0 || i===ozArr.length-1);
+    const Imax = ipcMaxCurrent(traceWidth_mm, oz, isExternal);
+    if (Imax<minI) minI = Imax;
+  });
+  return {ipcMax:minI, safe:minI*IPC_SAFETY_FRACTION};
+}
+
 /* ============================== STATE ============================== */
 let state = {
   shape:'circle',
@@ -435,10 +548,12 @@ let state = {
   clearance:0.3,
   layers:2,
   stack:1,
-  autoSep:true,
+  sepMode:'ideal',
   separation:150,
+  autoCurrent:true,
   current:0.5,
-  testVolume:80
+  testVolume:80,
+  tolPct:5
 };
 
 const els = {};
@@ -446,6 +561,8 @@ const els = {};
   els[id]=document.getElementById(id);
 });
 const autoSepEl = document.getElementById('autoSep');
+const autoCurrentEl = document.getElementById('autoCurrent');
+const tolPctEl = document.getElementById('tolPct');
 
 function fmt(v,d=2){ return Number(v).toFixed(d); }
 
@@ -476,17 +593,20 @@ function idealSeparation_mm(outerDim_mm){
   return state.shape==='square' ? 0.5445*outerDim_mm : outerDim_mm;
 }
 
-// Build all wire loops for one "side" (one coil = stack of boards), centered at side z = +-(sepGap/2 + j*boardThickness)
+function maxStabilitySeparation_mm(outerDim_mm){
+  // 4th-order null: separation ≈ 1.207 × radius (or side for square)
+  // provides better higher-derivative flatness than classic Helmholtz
+  return state.shape==='square' ? 1.207*outerDim_mm : 1.207*outerDim_mm;
+}
+
+// One loop per turn per board (layers folded into a current multiplier — they sit at the same z).
 function buildSideLoops(sizes, sepGap_mm, sign){
   const loops=[];
   const boardThk_mm = BOARD_THICKNESS_M*1e3;
   for(let j=0;j<state.stack;j++){
     const boardZ = sign*(sepGap_mm/2 + j*boardThk_mm);
-    for(let layer=0; layer<state.layers; layer++){
-      // negligible intra-board layer offset compared to coil dimensions
-      for(const s of sizes){
-        loops.push(loopPoints(state.shape, s, boardZ));
-      }
+    for(const s of sizes){
+      loops.push({points: loopPoints(state.shape, s, boardZ), mult: state.layers});
     }
   }
   return loops;
@@ -508,12 +628,7 @@ function renderSvg(sizes, outerDim_mm){
     }
   }
   const boardHalf = state.pcbSize/2*scale;
-  let boardShape;
-  if (state.shape==='square'){
-    boardShape = `<rect x="${cx-boardHalf}" y="${cy-boardHalf}" width="${boardHalf*2}" height="${boardHalf*2}" fill="none" stroke="#3a4f3f" stroke-dasharray="3,3"/>`;
-  } else {
-    boardShape = `<rect x="${cx-boardHalf}" y="${cy-boardHalf}" width="${boardHalf*2}" height="${boardHalf*2}" fill="none" stroke="#3a4f3f" stroke-dasharray="3,3"/>`;
-  }
+  const boardShape = `<rect x="${cx-boardHalf}" y="${cy-boardHalf}" width="${boardHalf*2}" height="${boardHalf*2}" fill="none" stroke="#3a4f3f" stroke-dasharray="3,3"/>`;
   document.getElementById('pcbSvgWrap').innerHTML =
     `<svg viewBox="0 0 ${vb} ${vb}" width="100%" height="100%">${boardShape}${shapes}</svg>`;
 }
@@ -529,13 +644,33 @@ function compute(){
     warnEl.classList.remove('show');
   }
 
-  const sepGap = state.autoSep ? idealSeparation_mm(outerDim_mm) : state.separation;
-  if (state.autoSep){
-    els.separation.value = sepGap;
-    document.getElementById('vSep').textContent = fmt(sepGap,1)+' mm (auto)';
-  } else {
-    document.getElementById('vSep').textContent = fmt(sepGap,1)+' mm';
+  // --- IPC-2221 current sizing ---
+  const ipc = recommendedCurrent(state.traceWidth, state.layers);
+  document.getElementById('ipcBox').innerHTML =
+    `IPC-2221 rated max (ΔT=${IPC_DELTA_T}°C, worst layer): <b>${fmt(ipc.ipcMax,2)} A</b><br>`+
+    `Recommended (${Math.round(IPC_SAFETY_FRACTION*100)}% derated, low self-heating): <b>${fmt(ipc.safe,2)} A</b>`;
+  if (state.autoCurrent){
+    state.current = ipc.safe;
+    els.current.value = Math.min(ipc.safe, +els.current.max);
+    document.getElementById('vCurrent').textContent = fmt(state.current,2)+' A (auto)';
   }
+
+  let sepGap = state.separation;
+  let sepLabel = 'mm';
+  if (state.sepMode==='ideal'){
+    sepGap = idealSeparation_mm(outerDim_mm);
+    sepLabel = 'mm (ideal)';
+    els.separation.disabled = true;
+  } else if (state.sepMode==='maxstab'){
+    sepGap = maxStabilitySeparation_mm(outerDim_mm);
+    sepLabel = 'mm (max stability)';
+    els.separation.disabled = true;
+  } else {
+    els.separation.disabled = false;
+  }
+  els.separation.value = sepGap;
+  document.getElementById('sepNum').value = fmt(sepGap,1);
+  document.getElementById('vSep').textContent = fmt(sepGap,1)+' '+sepLabel;
 
   const loopsTop = buildSideLoops(sizes, sepGap, +1);
   const loopsBot = buildSideLoops(sizes, sepGap, -1);
@@ -568,7 +703,7 @@ function compute(){
   const half_m = state.testVolume/2*1e-3;
   const sweepRange_mm = Math.max(sepGap*0.9, state.testVolume*1.5);
   const N=70;
-  const axialLabels=[], axialData=[], transLabels=[], transData=[];
+  const axialLabels=[], axialData=[], transData=[];
   for(let i=0;i<=N;i++){
     const z_mm = -sweepRange_mm + (2*sweepRange_mm*i/N);
     const Bz = fieldAtAll(allLoops, I, [0,0,z_mm*1e-3]);
@@ -579,7 +714,6 @@ function compute(){
     const x_mm = z_mm;
     const Bx = fieldAtAll(allLoops, I, [x_mm*1e-3,0,0]);
     const devX = Bmag>0 ? (vnorm(Bx)-Bmag)/Bmag*100 : 0;
-    transLabels.push(x_mm.toFixed(1));
     transData.push(devX);
   }
 
@@ -618,55 +752,269 @@ function compute(){
   const cEl = document.getElementById('uCorner'); cEl.textContent=fmt(devCorner,2)+'%'; cEl.style.color=devColor(devCorner);
 
   updateChart(axialLabels, axialData, transData, half_m*1e3, sweepRange_mm);
+  compute3DSurface(allLoops, I, Bmag, sweepRange_mm);
 }
 
-/* ============================== CHART ============================== */
-let chart=null;
+/* ============================== 1D CHART (plain canvas, no external lib) ============================== */
+let lastChartData = null;
 function updateChart(labels, axialData, transData, halfEdge_mm, range_mm){
-  const ctx = document.getElementById('chart').getContext('2d');
-  const testBand = {
-    id:'testBand',
-    beforeDraw(c){
-      const {ctx,chartArea:{top,bottom},scales:{x}} = c;
-      const x0 = x.getPixelForValue((-halfEdge_mm).toFixed(1));
-      const x1 = x.getPixelForValue((halfEdge_mm).toFixed(1));
-      ctx.save();
-      ctx.fillStyle = 'rgba(127,157,111,0.10)';
-      ctx.fillRect(x0, top, x1-x0, bottom-top);
-      ctx.restore();
-    }
-  };
-  const cfg = {
-    type:'line',
-    data:{
-      labels,
-      datasets:[
-        {label:'Axial (z)', data:axialData, borderColor:'#e9974f', backgroundColor:'transparent', borderWidth:2, pointRadius:0, tension:0.15},
-        {label:'Transverse (x)', data:transData, borderColor:'#7f9d6f', backgroundColor:'transparent', borderWidth:2, pointRadius:0, tension:0.15}
-      ]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      animation:{duration:200},
-      interaction:{mode:'index', intersect:false},
-      plugins:{
-        legend:{labels:{color:'#9c8f7c', font:{family:'JetBrains Mono', size:11}}},
-        tooltip:{
-          backgroundColor:'#221b13', borderColor:'#352b1d', borderWidth:1,
-          titleColor:'#ede5d8', bodyColor:'#ede5d8',
-          callbacks:{ label:(c)=> `${c.dataset.label}: ${c.parsed.y.toFixed(2)}%` }
-        }
-      },
-      scales:{
-        x:{ title:{display:true,text:'distance from center (mm)',color:'#6b6052',font:{size:11}}, ticks:{color:'#6b6052', maxTicksLimit:9, font:{size:10}}, grid:{color:'#241d15'} },
-        y:{ title:{display:true,text:'deviation from center field (%)',color:'#6b6052',font:{size:11}}, ticks:{color:'#6b6052', font:{size:10}}, grid:{color:'#241d15'} }
-      }
-    },
-    plugins:[testBand]
-  };
-  if (chart){ chart.data=cfg.data; chart.update(); }
-  else { chart = new Chart(ctx, cfg); }
+  lastChartData = {labels, axialData, transData, halfEdge_mm, range_mm};
+  drawChart();
 }
+
+function drawChart(){
+  if (!lastChartData) return;
+  const {axialData, transData, halfEdge_mm, range_mm} = lastChartData;
+  const canvas = document.getElementById('chart');
+  const dpr = window.devicePixelRatio||1;
+  const wrap = canvas.parentElement;
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  canvas.width = Math.round(W*dpr); canvas.height = Math.round(H*dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+
+  const padL=46, padR=14, padT=14, padB=30;
+  const plotW = W-padL-padR, plotH = H-padT-padB;
+
+  const allVals = axialData.concat(transData);
+  let yMin = Math.min(...allVals,0), yMax = Math.max(...allVals,0);
+  const yPad = (yMax-yMin)*0.1 || 1;
+  yMin -= yPad; yMax += yPad;
+  const xMin = -range_mm, xMax = range_mm;
+
+  const xPix = (x)=> padL + (x-xMin)/(xMax-xMin)*plotW;
+  const yPix = (y)=> padT + (1-(y-yMin)/(yMax-yMin))*plotH;
+
+  // test-volume shaded band
+  ctx.fillStyle = 'rgba(127,157,111,0.10)';
+  ctx.fillRect(xPix(-halfEdge_mm), padT, xPix(halfEdge_mm)-xPix(-halfEdge_mm), plotH);
+
+  // gridlines + axes
+  ctx.strokeStyle = '#241d15'; ctx.lineWidth=1;
+  ctx.fillStyle = '#6b6052'; ctx.font = '10px JetBrains Mono, monospace';
+  const nTicksX = 7;
+  for(let i=0;i<=nTicksX;i++){
+    const xv = xMin + (xMax-xMin)*i/nTicksX;
+    const px = xPix(xv);
+    ctx.beginPath(); ctx.moveTo(px,padT); ctx.lineTo(px,padT+plotH); ctx.stroke();
+    ctx.textAlign='center'; ctx.fillText(xv.toFixed(0), px, H-12);
+  }
+  const nTicksY = 5;
+  for(let i=0;i<=nTicksY;i++){
+    const yv = yMin + (yMax-yMin)*i/nTicksY;
+    const py = yPix(yv);
+    ctx.beginPath(); ctx.moveTo(padL,py); ctx.lineTo(padL+plotW,py); ctx.stroke();
+    ctx.textAlign='right'; ctx.fillText(yv.toFixed(1), padL-8, py+3);
+  }
+  // zero line emphasis
+  if (yMin<0 && yMax>0){
+    ctx.strokeStyle = '#3a3022'; ctx.lineWidth=1.2;
+    const py = yPix(0);
+    ctx.beginPath(); ctx.moveTo(padL,py); ctx.lineTo(padL+plotW,py); ctx.stroke();
+  }
+
+  function drawLine(data, color){
+    ctx.beginPath();
+    data.forEach((v,i)=>{
+      const xv = xMin + (xMax-xMin)*i/(data.length-1);
+      const px = xPix(xv), py = yPix(v);
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    });
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+  }
+  drawLine(axialData, '#e9974f');
+  drawLine(transData, '#7f9d6f');
+
+  // axis labels
+  ctx.fillStyle = '#6b6052'; ctx.font = '11px Inter, sans-serif';
+  ctx.textAlign='center';
+  ctx.fillText('distance from center (mm)', padL+plotW/2, H-1);
+  ctx.save();
+  ctx.translate(12, padT+plotH/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('deviation from center field (%)', 0, 0);
+  ctx.restore();
+
+  // legend
+  ctx.font = '11px JetBrains Mono, monospace'; ctx.textAlign='left';
+  ctx.fillStyle = '#e9974f'; ctx.fillRect(padL+plotW-150, padT+6, 10, 3);
+  ctx.fillStyle = '#9c8f7c'; ctx.fillText('Axial (z)', padL+plotW-134, padT+12);
+  ctx.fillStyle = '#7f9d6f'; ctx.fillRect(padL+plotW-150, padT+22, 10, 3);
+  ctx.fillStyle = '#9c8f7c'; ctx.fillText('Transverse (x)', padL+plotW-134, padT+28);
+}
+window.addEventListener('resize', ()=>{ drawChart(); });
+
+/* ============================== 3D UNIFORMITY SURFACE ==============================
+   Custom canvas isometric projection — no external 3D lib, kept deliberately plain:
+   one muted diverging colormap, thin wireframe, no gloss/lighting effects.
+======================================================================================= */
+const GRID_N = 19; // odd, so center point is sampled exactly
+let surface3D = { grid:null, range_mm:100, maxAbsDev:1 };
+let azimuth = Math.PI*0.25, elevation = 0.55; // radians; elevation fixed-ish, user rotates azimuth
+
+function compute3DSurface(allLoops, I, Bmag, range_mm){
+  const half = range_mm;
+  const grid = [];
+  for(let j=0;j<GRID_N;j++){
+    const row=[];
+    const y_mm = -half + 2*half*j/(GRID_N-1);
+    for(let i=0;i<GRID_N;i++){
+      const x_mm = -half + 2*half*i/(GRID_N-1);
+      const B = fieldAtAll(allLoops, I, [x_mm*1e-3, y_mm*1e-3, 0]);
+      const dev = Bmag>0 ? (vnorm(B)-Bmag)/Bmag*100 : 0;
+      row.push({x:x_mm, y:y_mm, dev});
+    }
+    grid.push(row);
+  }
+  let maxAbsDev = 0.01;
+  for(const row of grid) for(const p of row) if (Math.abs(p.dev)>maxAbsDev) maxAbsDev = Math.abs(p.dev);
+  surface3D = { grid, range_mm: half, maxAbsDev };
+  render3D();
+}
+
+function colorForDev(dev, maxAbs){
+  const t = Math.max(-1, Math.min(1, dev/maxAbs)); // -1..1
+  // negative -> muted sage green, 0 -> warm cream, positive -> muted copper/red
+  const neg = [127,157,111], mid=[210,200,180], pos=[194,91,66];
+  let c;
+  if (t<0){ const u=-t; c=neg.map((v,i)=>Math.round(v*u+mid[i]*(1-u))); }
+  else    { const u=t;  c=pos.map((v,i)=>Math.round(v*u+mid[i]*(1-u))); }
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+function project(x_mm, y_mm, h, cx, cy, s){
+  // rotate footprint by azimuth, then isometric-ish projection with fixed elevation
+  const ca=Math.cos(azimuth), sa=Math.sin(azimuth);
+  const X = x_mm*ca - y_mm*sa;
+  const Y = x_mm*sa + y_mm*ca;
+  const ce=Math.cos(elevation), se=Math.sin(elevation);
+  const sx = cx + X*s;
+  const sy = cy + (Y*se)*s - h*ce*1.0;
+  return [sx, sy];
+}
+
+function render3D(){
+  const canvas = document.getElementById('canvas3d');
+  const dpr = window.devicePixelRatio||1;
+  const rect = canvas.getBoundingClientRect();
+  const W = Math.max(300, rect.width), H = canvas.clientHeight || 420;
+  if (canvas.width !== Math.round(W*dpr) || canvas.height !== Math.round(H*dpr)){
+    canvas.width = Math.round(W*dpr); canvas.height = Math.round(H*dpr);
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+
+  const {grid, range_mm, maxAbsDev} = surface3D;
+  if (!grid) return;
+
+  const cx = W/2, cy = H*0.62;
+  const s = Math.min(W,H) / (range_mm*2.9);
+  const heightScale = Math.min(W,H) * 0.16 / Math.max(maxAbsDev, 1e-6);
+
+  // base footprint outline (test plane bounds)
+  ctx.strokeStyle = 'rgba(156,143,124,0.25)';
+  ctx.setLineDash([3,3]);
+  ctx.beginPath();
+  const corners = [[-range_mm,-range_mm],[range_mm,-range_mm],[range_mm,range_mm],[-range_mm,range_mm]];
+  corners.forEach((c,idx)=>{
+    const [px,py] = project(c[0],c[1],0,cx,cy,s);
+    idx===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+  });
+  ctx.closePath(); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // build quads with depth
+  const quads=[];
+  for(let j=0;j<GRID_N-1;j++){
+    for(let i=0;i<GRID_N-1;i++){
+      const p00=grid[j][i], p10=grid[j][i+1], p11=grid[j+1][i+1], p01=grid[j+1][i];
+      const avgDev = (p00.dev+p10.dev+p11.dev+p01.dev)/4;
+      const ca=Math.cos(azimuth), sa=Math.sin(azimuth);
+      const depth = [p00,p10,p11,p01].reduce((acc,p)=> acc + (p.x*sa+p.y*ca), 0)/4;
+      quads.push({pts:[p00,p10,p11,p01], avgDev, depth});
+    }
+  }
+  quads.sort((a,b)=> a.depth-b.depth); // far first
+
+  for(const q of quads){
+    ctx.beginPath();
+    q.pts.forEach((p,idx)=>{
+      const h = p.dev*heightScale;
+      const [px,py] = project(p.x,p.y, h, cx, cy, s);
+      idx===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    });
+    ctx.closePath();
+    ctx.fillStyle = colorForDev(q.avgDev, maxAbsDev);
+    ctx.globalAlpha = 0.92;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(20,17,13,0.55)';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+  }
+
+  // tolerance reference planes (outline only, drawn on top)
+  const tol = Math.max(0.01, state.tolPct);
+  [tol, -tol].forEach((tv,idx)=>{
+    const h = tv*heightScale;
+    ctx.beginPath();
+    corners.forEach((c,ci)=>{
+      const [px,py] = project(c[0],c[1],h,cx,cy,s);
+      ci===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    });
+    ctx.closePath();
+    ctx.strokeStyle = idx===0 ? 'rgba(210,162,74,0.65)' : 'rgba(127,157,111,0.65)';
+    ctx.setLineDash([5,4]);
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // cross-section reference lines (axes through center)
+  ctx.strokeStyle = 'rgba(232,151,79,0.3)'; ctx.lineWidth=0.8;
+  [-range_mm, 0, range_mm].forEach(v=>{
+    ctx.beginPath();
+    const [p1x,p1y] = project(v, -range_mm, 0, cx, cy, s);
+    const [p2x,p2y] = project(v, range_mm, 0, cx, cy, s);
+    ctx.moveTo(p1x,p1y); ctx.lineTo(p2x,p2y);
+    ctx.stroke();
+  });
+
+  // statistics overlay
+  let statsHtml = `<b>Surface stats</b><br>`;
+  let minDev = Infinity, maxDev = -Infinity;
+  for(const row of grid) for(const p of row){
+    if (p.dev<minDev) minDev=p.dev;
+    if (p.dev>maxDev) maxDev=p.dev;
+  }
+  const centerDev = grid[Math.floor(GRID_N/2)][Math.floor(GRID_N/2)].dev;
+  statsHtml += `center: ${fmt(centerDev,2)}%<br>`;
+  statsHtml += `min/max: ${fmt(minDev,2)}% / ${fmt(maxDev,2)}%<br>`;
+  statsHtml += `range: ${fmt(maxDev-minDev,2)}%<br>`;
+  statsHtml += `<br><b>Tolerance band</b><br>`;
+  statsHtml += `±${fmt(tol,1)}%<br>`;
+  const inSpec = minDev>=-tol && maxDev<=tol;
+  statsHtml += `${inSpec?'<span style="color:#7f9d6f">✓ IN SPEC</span>':'<span style="color:#c25b42">✗ OUT OF SPEC</span>'}`;
+  document.getElementById('legend3d').innerHTML = statsHtml;
+}
+
+
+// drag-to-rotate
+(function setupDrag(){
+  const canvas = document.getElementById('canvas3d');
+  let dragging=false, lastX=0;
+  const start = (x)=>{ dragging=true; lastX=x; };
+  const move = (x)=>{ if(!dragging) return; azimuth += (x-lastX)*0.008; lastX=x; render3D(); };
+  const end = ()=>{ dragging=false; };
+  canvas.addEventListener('mousedown', e=>start(e.clientX));
+  window.addEventListener('mousemove', e=>move(e.clientX));
+  window.addEventListener('mouseup', end);
+  canvas.addEventListener('touchstart', e=>start(e.touches[0].clientX), {passive:true});
+  canvas.addEventListener('touchmove', e=>{move(e.touches[0].clientX);}, {passive:true});
+  canvas.addEventListener('touchend', end);
+  window.addEventListener('resize', ()=>render3D());
+})();
 
 /* ============================== UI WIRING ============================== */
 function setShape(s){
@@ -676,12 +1024,59 @@ function setShape(s){
   scheduleCompute();
 }
 
+function setSepMode(mode){
+  state.sepMode = mode;
+  scheduleCompute();
+}
+
+function setSepFromNum(){
+  state.separation = Math.max(10, Math.min(1000, +document.getElementById('sepNum').value || 150));
+  document.getElementById('separation').value = state.separation;
+  if (state.sepMode==='manual') scheduleCompute();
+}
+
+function setPcbSizeFromNum(){
+  state.pcbSize = Math.max(50, Math.min(800, +document.getElementById('pcbSizeNum').value || 200));
+  els.pcbSize.value = state.pcbSize;
+  scheduleCompute();
+}
+
+function setDonutWidthFromNum(){
+  state.donutWidth = Math.max(5, Math.min(390, +document.getElementById('donutWidthNum').value || 60));
+  document.getElementById('donutWidth').value = state.donutWidth;
+  scheduleCompute();
+}
+
+function setTraceWidthFromNum(){
+  state.traceWidth = Math.max(0.1, Math.min(6, +document.getElementById('traceWidthNum').value || 0.8));
+  els.traceWidth.value = state.traceWidth;
+  scheduleCompute();
+}
+
+function setClearanceFromNum(){
+  state.clearance = Math.max(0.1, Math.min(6, +document.getElementById('clearanceNum').value || 0.3));
+  els.clearance.value = state.clearance;
+  scheduleCompute();
+}
+
+function setCurrentFromNum(){
+  state.current = Math.max(0.01, Math.min(10, +document.getElementById('currentNum').value || 0.5));
+  els.current.value = state.current;
+  scheduleCompute();
+}
+
+function setTestVolFromNum(){
+  state.testVolume = Math.max(10, Math.min(600, +document.getElementById('testVolNum').value || 80));
+  els.testVolume.value = state.testVolume;
+  scheduleCompute();
+}
+
 function step(key,dir){
   if (key==='layers'){
-    state.layers = Math.min(8, Math.max(1, state.layers+dir));
+    state.layers = Math.min(16, Math.max(1, state.layers+dir));
     document.getElementById('vLayers').textContent = state.layers;
   } else if (key==='stack'){
-    state.stack = Math.min(5, Math.max(1, state.stack+dir));
+    state.stack = Math.min(10, Math.max(1, state.stack+dir));
     document.getElementById('vStack').textContent = state.stack;
   }
   scheduleCompute();
@@ -689,11 +1084,19 @@ function step(key,dir){
 
 function syncLabels(){
   document.getElementById('vPcbSize').textContent = state.pcbSize+' mm';
+  document.getElementById('pcbSizeNum').value = state.pcbSize;
   document.getElementById('vDonut').textContent = state.donutWidth+' mm';
+  document.getElementById('donutWidthNum').value = state.donutWidth;
   document.getElementById('vTraceW').textContent = state.traceWidth.toFixed(2)+' mm';
+  document.getElementById('traceWidthNum').value = state.traceWidth.toFixed(2);
   document.getElementById('vClear').textContent = state.clearance.toFixed(2)+' mm';
-  document.getElementById('vCurrent').textContent = state.current.toFixed(2)+' A';
+  document.getElementById('clearanceNum').value = state.clearance.toFixed(2);
+  if (!state.autoCurrent){
+    document.getElementById('vCurrent').textContent = state.current.toFixed(2)+' A';
+    document.getElementById('currentNum').value = state.current.toFixed(2);
+  }
   document.getElementById('vTestVol').textContent = state.testVolume+' mm';
+  document.getElementById('testVolNum').value = state.testVolume;
 }
 
 let debounceTimer=null;
@@ -703,16 +1106,18 @@ function scheduleCompute(){
   debounceTimer = setTimeout(compute, 60);
 }
 
-els.pcbSize.addEventListener('input', e=>{ state.pcbSize=+e.target.value; scheduleCompute(); });
-els.donutWidth.addEventListener('input', e=>{ state.donutWidth=+e.target.value; scheduleCompute(); });
-els.traceWidth.addEventListener('input', e=>{ state.traceWidth=+e.target.value; scheduleCompute(); });
-els.clearance.addEventListener('input', e=>{ state.clearance=+e.target.value; scheduleCompute(); });
-els.separation.addEventListener('input', e=>{ state.separation=+e.target.value; scheduleCompute(); });
-els.current.addEventListener('input', e=>{ state.current=+e.target.value; scheduleCompute(); });
-els.testVolume.addEventListener('input', e=>{ state.testVolume=+e.target.value; scheduleCompute(); });
-autoSepEl.addEventListener('change', e=>{
-  state.autoSep = e.target.checked;
-  els.separation.disabled = state.autoSep;
+els.pcbSize.addEventListener('input', e=>{ state.pcbSize=+e.target.value; document.getElementById('pcbSizeNum').value=state.pcbSize; scheduleCompute(); });
+els.donutWidth.addEventListener('input', e=>{ state.donutWidth=+e.target.value; document.getElementById('donutWidthNum').value=state.donutWidth; scheduleCompute(); });
+els.traceWidth.addEventListener('input', e=>{ state.traceWidth=+e.target.value; document.getElementById('traceWidthNum').value=state.traceWidth.toFixed(2); scheduleCompute(); });
+els.clearance.addEventListener('input', e=>{ state.clearance=+e.target.value; document.getElementById('clearanceNum').value=state.clearance.toFixed(2); scheduleCompute(); });
+els.separation.addEventListener('input', e=>{ state.separation=+e.target.value; document.getElementById('sepNum').value=state.separation; scheduleCompute(); });
+els.current.addEventListener('input', e=>{ state.current=+e.target.value; document.getElementById('currentNum').value=state.current.toFixed(2); scheduleCompute(); });
+els.testVolume.addEventListener('input', e=>{ state.testVolume=+e.target.value; document.getElementById('testVolNum').value=state.testVolume; scheduleCompute(); });
+tolPctEl.addEventListener('input', e=>{ state.tolPct = Math.max(0.01,+e.target.value||5); render3D(); });
+autoCurrentEl.addEventListener('change', e=>{
+  state.autoCurrent = e.target.checked;
+  els.current.disabled = state.autoCurrent;
+  document.getElementById('currentNum').disabled = state.autoCurrent;
   scheduleCompute();
 });
 
