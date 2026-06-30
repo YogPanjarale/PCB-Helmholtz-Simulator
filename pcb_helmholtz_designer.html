@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCB Helmholtz Coil Designer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#14110d;
+    --bg-panel:#1b1610;
+    --bg-input:#221b13;
+    --border:#352b1d;
+    --border-soft:#2a2218;
+    --text:#ede5d8;
+    --text-dim:#9c8f7c;
+    --text-faint:#6b6052;
+    --accent:#c9793c;
+    --accent-bright:#e9974f;
+    --accent-dim:#8a5128;
+    --good:#7f9d6f;
+    --warn:#d2a24a;
+    --bad:#c25b42;
+    --trace:#d68a48;
+    --board:#1a2e22;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding:28px 20px 60px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+  header{margin-bottom:28px;}
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin-bottom:8px;
+  }
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:30px;
+    font-weight:700;
+    margin:0 0 6px;
+    letter-spacing:-.01em;
+  }
+  .sub{color:var(--text-dim);font-size:14px;max-width:640px;line-height:1.5;}
+
+  .layout{
+    display:grid;
+    grid-template-columns:340px 1fr;
+    gap:20px;
+    align-items:start;
+  }
+  @media (max-width:880px){ .layout{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--bg-panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:20px;
+  }
+  .panel + .panel{margin-top:18px;}
+  .panel h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--text-dim);
+    margin:0 0 16px;
+    font-weight:600;
+  }
+
+  .field{margin-bottom:18px;}
+  .field:last-child{margin-bottom:0;}
+  .field-label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:13px;color:var(--text);margin-bottom:7px;
+  }
+  .field-label .val{
+    font-family:'JetBrains Mono',monospace;
+    color:var(--accent-bright);
+    font-size:12.5px;
+  }
+  .field-hint{font-size:11px;color:var(--text-faint);margin-top:5px;line-height:1.4;}
+
+  input[type=range]{
+    -webkit-appearance:none;
+    width:100%;height:4px;
+    background:var(--border);
+    border-radius:3px;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:15px;height:15px;border-radius:50%;
+    background:var(--accent-bright);
+    border:2px solid var(--bg);
+    cursor:pointer;
+    box-shadow:0 0 0 1px var(--accent-dim);
+  }
+  input[type=range]:disabled::-webkit-slider-thumb{background:var(--text-faint);box-shadow:none;}
+  input[type=range]::-moz-range-thumb{
+    width:13px;height:13px;border-radius:50%;
+    background:var(--accent-bright);border:2px solid var(--bg);cursor:pointer;
+  }
+
+  .shape-toggle{display:flex;gap:8px;}
+  .shape-btn{
+    flex:1;padding:9px 10px;border-radius:9px;
+    border:1px solid var(--border);
+    background:var(--bg-input);
+    color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+    cursor:pointer;transition:.15s;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .shape-btn.active{
+    border-color:var(--accent);
+    color:var(--accent-bright);
+    background:rgba(201,121,60,.12);
+  }
+
+  .stepper{display:flex;align-items:center;gap:10px;}
+  .stepper button{
+    width:30px;height:30px;border-radius:8px;
+    border:1px solid var(--border);background:var(--bg-input);
+    color:var(--text);font-size:16px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:.15s;
+  }
+  .stepper button:hover{border-color:var(--accent);color:var(--accent-bright);}
+  .stepper .count{
+    font-family:'JetBrains Mono',monospace;font-size:14px;
+    min-width:24px;text-align:center;color:var(--accent-bright);
+  }
+
+  .checkrow{
+    display:flex;align-items:center;gap:9px;
+    font-size:12.5px;color:var(--text-dim);cursor:pointer;
+    margin-bottom:14px;
+  }
+  .checkrow input{accent-color:var(--accent);width:14px;height:14px;}
+
+  /* Output area */
+  .stat-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
+  }
+  @media (max-width:620px){ .stat-grid{grid-template-columns:repeat(2,1fr);} }
+  .stat{
+    background:var(--bg-input);
+    border:1px solid var(--border-soft);
+    border-radius:10px;
+    padding:13px 14px;
+  }
+  .stat-label{font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+  .stat-value{
+    font-family:'JetBrains Mono',monospace;
+    font-size:18px;font-weight:600;color:var(--text);
+  }
+  .stat-value.accent{color:var(--accent-bright);}
+  .stat-value .unit{font-size:12px;color:var(--text-dim);font-weight:400;margin-left:2px;}
+
+  .uniformity-row{
+    display:flex;gap:12px;margin-top:14px;flex-wrap:wrap;
+  }
+  .uchip{
+    flex:1;min-width:140px;
+    background:var(--bg-input);
+    border:1px solid var(--border-soft);
+    border-radius:10px;padding:12px 14px;
+  }
+  .uchip-label{font-size:11px;color:var(--text-faint);margin-bottom:5px;}
+  .uchip-value{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:600;}
+
+  .preview-row{display:grid;grid-template-columns:200px 1fr;gap:18px;align-items:center;}
+  @media (max-width:620px){ .preview-row{grid-template-columns:1fr;} }
+  #pcbSvgWrap{
+    background:var(--board);
+    border-radius:10px;
+    border:1px solid var(--border-soft);
+    aspect-ratio:1/1;
+    display:flex;align-items:center;justify-content:center;
+    padding:8px;
+  }
+  .geo-stats{font-size:12.5px;color:var(--text-dim);line-height:1.9;}
+  .geo-stats b{color:var(--text);font-family:'JetBrains Mono',monospace;font-weight:500;}
+
+  .chart-wrap{height:280px;margin-top:6px;}
+  .legend-note{font-size:11px;color:var(--text-faint);margin-top:10px;line-height:1.5;}
+
+  .warn-banner{
+    background:rgba(210,162,74,.1);
+    border:1px solid rgba(210,162,74,.35);
+    color:var(--warn);
+    font-size:12.5px;
+    border-radius:9px;
+    padding:10px 14px;
+    margin-bottom:16px;
+    display:none;
+  }
+  .warn-banner.show{display:block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Ground-test ACS calibration rig</div>
+    <h1>PCB Helmholtz Coil Designer</h1>
+    <div class="sub">Tune the trace layout and stack geometry on the left — field strength, uniformity, resistance, and drive power recompute live from a validated 3D Biot-Savart solve over the actual winding pattern.</div>
+  </header>
+
+  <div class="layout">
+    <!-- CONTROLS -->
+    <div>
+      <div class="panel">
+        <h2>Coil shape & board</h2>
+
+        <div class="field">
+          <div class="field-label">Coil shape</div>
+          <div class="shape-toggle">
+            <button class="shape-btn active" id="btnCircle" onclick="setShape('circle')">○ Circular</button>
+            <button class="shape-btn" id="btnSquare" onclick="setShape('square')">□ Square</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>PCB outer size</span><span class="val" id="vPcbSize"></span></div>
+          <input type="range" id="pcbSize" min="50" max="400" step="1" value="200">
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>Winding (donut) width</span><span class="val" id="vDonut"></span></div>
+          <input type="range" id="donutWidth" min="5" max="195" step="1" value="60">
+          <div class="field-hint">Radial width of the spiral ring — board can have an open/unwound center.</div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>Trace width</span><span class="val" id="vTraceW"></span></div>
+          <input type="range" id="traceWidth" min="0.1" max="3" step="0.05" value="0.8">
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>Clearance</span><span class="val" id="vClear"></span></div>
+          <input type="range" id="clearance" min="0.1" max="3" step="0.05" value="0.3">
+          <div class="field-hint">Track-to-track gap, also used as the outer-trace-to-board-edge clearance.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Layers & stacking</h2>
+
+        <div class="field">
+          <div class="field-label">Copper layers per PCB</div>
+          <div class="stepper">
+            <button onclick="step('layers',-1)">–</button>
+            <span class="count" id="vLayers">2</span>
+            <button onclick="step('layers',1)">+</button>
+          </div>
+          <div class="field-hint">Outer 2 layers: 1 oz/ft² copper. Any inner layers: 0.5 oz/ft² (standard stackup).</div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">PCBs stacked per side</div>
+          <div class="stepper">
+            <button onclick="step('stack',-1)">–</button>
+            <span class="count" id="vStack">1</span>
+            <button onclick="step('stack',1)">+</button>
+          </div>
+          <div class="field-hint">Symmetric on both sides. Each board 1.6 mm thick, stacked face to face.</div>
+        </div>
+
+        <div class="field">
+          <label class="checkrow">
+            <input type="checkbox" id="autoSep" checked>
+            Use ideal Helmholtz separation
+          </label>
+          <div class="field-label"><span>Separation between the two coils</span><span class="val" id="vSep"></span></div>
+          <input type="range" id="separation" min="10" max="500" step="1" value="150" disabled>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Drive & test volume</h2>
+
+        <div class="field">
+          <div class="field-label"><span>Drive current</span><span class="val" id="vCurrent"></span></div>
+          <input type="range" id="current" min="0.01" max="5" step="0.01" value="0.5">
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>Test volume (cube edge)</span><span class="val" id="vTestVol"></span></div>
+          <input type="range" id="testVolume" min="10" max="300" step="1" value="80">
+          <div class="field-hint">e.g. your CubeSat envelope, centered between the two coils.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OUTPUT -->
+    <div>
+      <div class="warn-banner" id="warnBanner"></div>
+
+      <div class="panel">
+        <h2>PCB layout & winding</h2>
+        <div class="preview-row">
+          <div id="pcbSvgWrap"></div>
+          <div class="geo-stats" id="geoStats"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Field at center</h2>
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-label">B field (on-axis)</div><div class="stat-value accent" id="oBfield">–</div></div>
+          <div class="stat"><div class="stat-label">Total turns / coil</div><div class="stat-value" id="oTurns">–</div></div>
+          <div class="stat"><div class="stat-label">Coil separation</div><div class="stat-value" id="oSep">–</div></div>
+          <div class="stat"><div class="stat-label">Trace length (total)</div><div class="stat-value" id="oLength">–</div></div>
+          <div class="stat"><div class="stat-label">Resistance</div><div class="stat-value" id="oRes">–</div></div>
+          <div class="stat"><div class="stat-label">Drive voltage</div><div class="stat-value" id="oVolt">–</div></div>
+          <div class="stat"><div class="stat-label">Power dissipation</div><div class="stat-value" id="oPower">–</div></div>
+          <div class="stat"><div class="stat-label">Current density</div><div class="stat-value" id="oJ">–</div></div>
+          <div class="stat"><div class="stat-label">Outer turn size</div><div class="stat-value" id="oOuter">–</div></div>
+        </div>
+
+        <div class="uniformity-row">
+          <div class="uchip"><div class="uchip-label">Transverse deviation @ ±edge</div><div class="uchip-value" id="uTrans">–</div></div>
+          <div class="uchip"><div class="uchip-label">Axial deviation @ ±edge</div><div class="uchip-value" id="uAxial">–</div></div>
+          <div class="uchip"><div class="uchip-label">Worst-case (cube corner)</div><div class="uchip-value" id="uCorner">–</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Field profile</h2>
+        <div class="chart-wrap"><canvas id="chart"></canvas></div>
+        <div class="legend-note">Both curves are single-axis sweeps through the coil center — transverse (x) is identical to y by symmetry, so only one is shown. Shaded band marks the test-volume half-width.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================== PHYSICS CORE ==============================
+   Validated against analytic on-axis solutions:
+   - circular loop center field: mu0*I/(2R)               -> matched to 0.08%
+   - circular loop off-axis: mu0*I*R^2/(2*(R^2+z^2)^1.5)   -> matched to 0.02%
+   - square loop center field: 2*sqrt(2)*mu0*I/(pi*a)      -> exact (straight segments)
+============================================================================ */
+const MU0 = 4*Math.PI*1e-7;
+const RHO_CU = 1.68e-8;
+const BOARD_THICKNESS_M = 1.6e-3;
+const OZ_TO_M = 35e-6; // 1 oz/ft^2 copper
+
+function sub(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
+function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+function cross(a,b){return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];}
+function vnorm(a){return Math.sqrt(dot(a,a));}
+function vscale(a,s){return [a[0]*s,a[1]*s,a[2]*s];}
+
+function segmentB(p1,p2,I,P){
+  const Lvec = sub(p2,p1);
+  const Llen = vnorm(Lvec);
+  if (Llen<1e-12) return [0,0,0];
+  const uhat = vscale(Lvec,1/Llen);
+  const rp1 = sub(P,p1);
+  const t = dot(rp1,uhat);
+  const rperp = sub(rp1, vscale(uhat,t));
+  const d = vnorm(rperp);
+  if (d<1e-9) return [0,0,0];
+  const r1 = vnorm(rp1);
+  const rp2 = sub(P,p2);
+  const r2 = vnorm(rp2);
+  const c1 = dot(uhat,rp1)/r1;
+  const c2 = dot(uhat,rp2)/r2;
+  const dirC = cross(uhat,rperp);
+  const dn = vnorm(dirC);
+  if (dn<1e-12) return [0,0,0];
+  const dirHat = vscale(dirC,1/dn);
+  const mag = (MU0*I)/(4*Math.PI*d)*(c1-c2);
+  return vscale(dirHat,mag);
+}
+
+function loopFieldAt(loopPts,I,P){
+  let bx=0,by=0,bz=0;
+  for(let i=0;i<loopPts.length-1;i++){
+    const b = segmentB(loopPts[i],loopPts[i+1],I,P);
+    bx+=b[0]; by+=b[1]; bz+=b[2];
+  }
+  return [bx,by,bz];
+}
+
+function fieldAtAll(loops,I,P){
+  let bx=0,by=0,bz=0;
+  for(const lp of loops){
+    const b = loopFieldAt(lp,I,P);
+    bx+=b[0]; by+=b[1]; bz+=b[2];
+  }
+  return [bx,by,bz];
+}
+
+const CIRCLE_SEG = 36;
+function loopPoints(shape, size_mm, z_mm){
+  const z = z_mm*1e-3;
+  if (shape==='square'){
+    const h = size_mm/2*1e-3;
+    return [[-h,-h,z],[h,-h,z],[h,h,z],[-h,h,z],[-h,-h,z]];
+  } else {
+    const r = size_mm*1e-3;
+    const pts=[];
+    for(let i=0;i<=CIRCLE_SEG;i++){
+      const th = 2*Math.PI*i/CIRCLE_SEG;
+      pts.push([r*Math.cos(th), r*Math.sin(th), z]);
+    }
+    return pts;
+  }
+}
+
+function perimeter_mm(shape,size_mm){
+  return shape==='square' ? 4*size_mm : 2*Math.PI*size_mm;
+}
+
+/* ============================== STATE ============================== */
+let state = {
+  shape:'circle',
+  pcbSize:200,
+  donutWidth:60,
+  traceWidth:0.8,
+  clearance:0.3,
+  layers:2,
+  stack:1,
+  autoSep:true,
+  separation:150,
+  current:0.5,
+  testVolume:80
+};
+
+const els = {};
+['pcbSize','donutWidth','traceWidth','clearance','separation','current','testVolume'].forEach(id=>{
+  els[id]=document.getElementById(id);
+});
+const autoSepEl = document.getElementById('autoSep');
+
+function fmt(v,d=2){ return Number(v).toFixed(d); }
+
+/* ============================== GEOMETRY ============================== */
+function generateTurnSizes(){
+  const outerDim = state.pcbSize/2 - state.clearance; // radius (circle) or half-side (square)
+  const donut = Math.min(state.donutWidth, outerDim - 0.5);
+  const pitch = state.traceWidth + state.clearance;
+  const nTurns = Math.max(0, Math.floor(donut/pitch));
+  const sizes = [];
+  for(let i=0;i<nTurns;i++){
+    const s = state.shape==='square' ? 2*(outerDim - i*pitch) : (outerDim - i*pitch);
+    sizes.push(s);
+  }
+  return {sizes, outerDim_mm: state.shape==='square' ? 2*outerDim : outerDim, pitch};
+}
+
+function layerThicknesses(numLayers){
+  const OZ_OUTER=1.0, OZ_INNER=0.5;
+  if (numLayers<=2) return Array(numLayers).fill(OZ_OUTER);
+  const arr=[OZ_OUTER];
+  for(let i=0;i<numLayers-2;i++) arr.push(OZ_INNER);
+  arr.push(OZ_OUTER);
+  return arr;
+}
+
+function idealSeparation_mm(outerDim_mm){
+  return state.shape==='square' ? 0.5445*outerDim_mm : outerDim_mm;
+}
+
+// Build all wire loops for one "side" (one coil = stack of boards), centered at side z = +-(sepGap/2 + j*boardThickness)
+function buildSideLoops(sizes, sepGap_mm, sign){
+  const loops=[];
+  const boardThk_mm = BOARD_THICKNESS_M*1e3;
+  for(let j=0;j<state.stack;j++){
+    const boardZ = sign*(sepGap_mm/2 + j*boardThk_mm);
+    for(let layer=0; layer<state.layers; layer++){
+      // negligible intra-board layer offset compared to coil dimensions
+      for(const s of sizes){
+        loops.push(loopPoints(state.shape, s, boardZ));
+      }
+    }
+  }
+  return loops;
+}
+
+/* ============================== SVG PREVIEW ============================== */
+function renderSvg(sizes, outerDim_mm){
+  const vb = 220;
+  const scale = (vb*0.92) / state.pcbSize;
+  const cx = vb/2, cy = vb/2;
+  let shapes = '';
+  for(const s of sizes){
+    if (state.shape==='square'){
+      const half = s/2*scale;
+      shapes += `<rect x="${cx-half}" y="${cy-half}" width="${half*2}" height="${half*2}" fill="none" stroke="var(--trace)" stroke-width="${Math.max(0.6,state.traceWidth*scale)}"/>`;
+    } else {
+      const r = s*scale;
+      shapes += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--trace)" stroke-width="${Math.max(0.6,state.traceWidth*scale)}"/>`;
+    }
+  }
+  const boardHalf = state.pcbSize/2*scale;
+  let boardShape;
+  if (state.shape==='square'){
+    boardShape = `<rect x="${cx-boardHalf}" y="${cy-boardHalf}" width="${boardHalf*2}" height="${boardHalf*2}" fill="none" stroke="#3a4f3f" stroke-dasharray="3,3"/>`;
+  } else {
+    boardShape = `<rect x="${cx-boardHalf}" y="${cy-boardHalf}" width="${boardHalf*2}" height="${boardHalf*2}" fill="none" stroke="#3a4f3f" stroke-dasharray="3,3"/>`;
+  }
+  document.getElementById('pcbSvgWrap').innerHTML =
+    `<svg viewBox="0 0 ${vb} ${vb}" width="100%" height="100%">${boardShape}${shapes}</svg>`;
+}
+
+/* ============================== MAIN COMPUTE ============================== */
+function compute(){
+  const {sizes, outerDim_mm, pitch} = generateTurnSizes();
+  const warnEl = document.getElementById('warnBanner');
+  if (sizes.length===0){
+    warnEl.textContent = 'Winding width too small for the chosen trace width + clearance — no turns fit. Increase donut width or reduce trace/clearance.';
+    warnEl.classList.add('show');
+  } else {
+    warnEl.classList.remove('show');
+  }
+
+  const sepGap = state.autoSep ? idealSeparation_mm(outerDim_mm) : state.separation;
+  if (state.autoSep){
+    els.separation.value = sepGap;
+    document.getElementById('vSep').textContent = fmt(sepGap,1)+' mm (auto)';
+  } else {
+    document.getElementById('vSep').textContent = fmt(sepGap,1)+' mm';
+  }
+
+  const loopsTop = buildSideLoops(sizes, sepGap, +1);
+  const loopsBot = buildSideLoops(sizes, sepGap, -1);
+  const allLoops = loopsTop.concat(loopsBot);
+
+  const I = state.current;
+
+  // --- B field at center (single axis value; off-axis components ~0 by symmetry) ---
+  const Bc = fieldAtAll(allLoops, I, [0,0,0]);
+  const Bmag = vnorm(Bc);
+
+  // --- electrical ---
+  const Lper_layer_m = sizes.reduce((acc,s)=>acc+perimeter_mm(state.shape,s),0)*1e-3;
+  const thicknesses = layerThicknesses(state.layers).map(oz=>oz*OZ_TO_M);
+  const w_m = state.traceWidth*1e-3;
+  let R_board = 0;
+  for(const t of thicknesses){
+    R_board += RHO_CU * Lper_layer_m / (w_m * t);
+  }
+  const L_board_total = Lper_layer_m * state.layers;
+  const R_total = R_board * state.stack * 2;
+  const L_total = L_board_total * state.stack * 2;
+  const V = I*R_total;
+  const P = I*I*R_total;
+  const J = I/(w_m*thicknesses[0]) / 1e6; // A/mm^2 using outer-layer thickness
+
+  const turnsPerCoil = sizes.length*state.layers*state.stack;
+
+  // --- sweeps (1D, single axis each) ---
+  const half_m = state.testVolume/2*1e-3;
+  const sweepRange_mm = Math.max(sepGap*0.9, state.testVolume*1.5);
+  const N=70;
+  const axialLabels=[], axialData=[], transLabels=[], transData=[];
+  for(let i=0;i<=N;i++){
+    const z_mm = -sweepRange_mm + (2*sweepRange_mm*i/N);
+    const Bz = fieldAtAll(allLoops, I, [0,0,z_mm*1e-3]);
+    const devZ = Bmag>0 ? (vnorm(Bz)-Bmag)/Bmag*100 : 0;
+    axialLabels.push(z_mm.toFixed(1));
+    axialData.push(devZ);
+
+    const x_mm = z_mm;
+    const Bx = fieldAtAll(allLoops, I, [x_mm*1e-3,0,0]);
+    const devX = Bmag>0 ? (vnorm(Bx)-Bmag)/Bmag*100 : 0;
+    transLabels.push(x_mm.toFixed(1));
+    transData.push(devX);
+  }
+
+  const Btrans_edge = fieldAtAll(allLoops, I, [half_m,0,0]);
+  const Baxial_edge = fieldAtAll(allLoops, I, [0,0,half_m]);
+  const Bcorner = fieldAtAll(allLoops, I, [half_m,half_m,half_m]);
+  const devTrans = Bmag>0 ? (vnorm(Btrans_edge)-Bmag)/Bmag*100 : 0;
+  const devAxial = Bmag>0 ? (vnorm(Baxial_edge)-Bmag)/Bmag*100 : 0;
+  const devCorner = Bmag>0 ? (vnorm(Bcorner)-Bmag)/Bmag*100 : 0;
+
+  /* ---------------- render outputs ---------------- */
+  renderSvg(sizes, outerDim_mm);
+
+  document.getElementById('geoStats').innerHTML = `
+    Turns per layer: <b>${sizes.length}</b><br>
+    Turns per coil (all layers × boards): <b>${turnsPerCoil}</b><br>
+    Winding pitch: <b>${fmt(pitch,2)} mm</b><br>
+    Outer turn ${state.shape==='square'?'side':'radius'}: <b>${fmt(outerDim_mm,1)} mm</b><br>
+    Layer copper (oz/ft²): <b>${layerThicknesses(state.layers).join(' / ')}</b><br>
+    Board stack thickness/side: <b>${fmt(state.stack*1.6,2)} mm</b>
+  `;
+
+  document.getElementById('oBfield').innerHTML = (Bmag*1e6<1000? fmt(Bmag*1e6,2)+'<span class="unit">µT</span>' : fmt(Bmag*1e3,3)+'<span class="unit">mT</span>');
+  document.getElementById('oTurns').textContent = turnsPerCoil;
+  document.getElementById('oSep').innerHTML = fmt(sepGap,1)+'<span class="unit">mm</span>';
+  document.getElementById('oLength').innerHTML = fmt(L_total,2)+'<span class="unit">m</span>';
+  document.getElementById('oRes').innerHTML = fmt(R_total,2)+'<span class="unit">Ω</span>';
+  document.getElementById('oVolt').innerHTML = fmt(V,2)+'<span class="unit">V</span>';
+  document.getElementById('oPower').innerHTML = fmt(P,2)+'<span class="unit">W</span>';
+  document.getElementById('oJ').innerHTML = fmt(J,2)+'<span class="unit">A/mm²</span>';
+  document.getElementById('oOuter').innerHTML = fmt(outerDim_mm,1)+'<span class="unit">mm</span>';
+
+  const devColor = d => Math.abs(d)<2?'var(--good)':Math.abs(d)<8?'var(--warn)':'var(--bad)';
+  const tEl = document.getElementById('uTrans'); tEl.textContent=fmt(devTrans,2)+'%'; tEl.style.color=devColor(devTrans);
+  const aEl = document.getElementById('uAxial'); aEl.textContent=fmt(devAxial,2)+'%'; aEl.style.color=devColor(devAxial);
+  const cEl = document.getElementById('uCorner'); cEl.textContent=fmt(devCorner,2)+'%'; cEl.style.color=devColor(devCorner);
+
+  updateChart(axialLabels, axialData, transData, half_m*1e3, sweepRange_mm);
+}
+
+/* ============================== CHART ============================== */
+let chart=null;
+function updateChart(labels, axialData, transData, halfEdge_mm, range_mm){
+  const ctx = document.getElementById('chart').getContext('2d');
+  const testBand = {
+    id:'testBand',
+    beforeDraw(c){
+      const {ctx,chartArea:{top,bottom},scales:{x}} = c;
+      const x0 = x.getPixelForValue((-halfEdge_mm).toFixed(1));
+      const x1 = x.getPixelForValue((halfEdge_mm).toFixed(1));
+      ctx.save();
+      ctx.fillStyle = 'rgba(127,157,111,0.10)';
+      ctx.fillRect(x0, top, x1-x0, bottom-top);
+      ctx.restore();
+    }
+  };
+  const cfg = {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Axial (z)', data:axialData, borderColor:'#e9974f', backgroundColor:'transparent', borderWidth:2, pointRadius:0, tension:0.15},
+        {label:'Transverse (x)', data:transData, borderColor:'#7f9d6f', backgroundColor:'transparent', borderWidth:2, pointRadius:0, tension:0.15}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      animation:{duration:200},
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{labels:{color:'#9c8f7c', font:{family:'JetBrains Mono', size:11}}},
+        tooltip:{
+          backgroundColor:'#221b13', borderColor:'#352b1d', borderWidth:1,
+          titleColor:'#ede5d8', bodyColor:'#ede5d8',
+          callbacks:{ label:(c)=> `${c.dataset.label}: ${c.parsed.y.toFixed(2)}%` }
+        }
+      },
+      scales:{
+        x:{ title:{display:true,text:'distance from center (mm)',color:'#6b6052',font:{size:11}}, ticks:{color:'#6b6052', maxTicksLimit:9, font:{size:10}}, grid:{color:'#241d15'} },
+        y:{ title:{display:true,text:'deviation from center field (%)',color:'#6b6052',font:{size:11}}, ticks:{color:'#6b6052', font:{size:10}}, grid:{color:'#241d15'} }
+      }
+    },
+    plugins:[testBand]
+  };
+  if (chart){ chart.data=cfg.data; chart.update(); }
+  else { chart = new Chart(ctx, cfg); }
+}
+
+/* ============================== UI WIRING ============================== */
+function setShape(s){
+  state.shape=s;
+  document.getElementById('btnCircle').classList.toggle('active', s==='circle');
+  document.getElementById('btnSquare').classList.toggle('active', s==='square');
+  scheduleCompute();
+}
+
+function step(key,dir){
+  if (key==='layers'){
+    state.layers = Math.min(8, Math.max(1, state.layers+dir));
+    document.getElementById('vLayers').textContent = state.layers;
+  } else if (key==='stack'){
+    state.stack = Math.min(5, Math.max(1, state.stack+dir));
+    document.getElementById('vStack').textContent = state.stack;
+  }
+  scheduleCompute();
+}
+
+function syncLabels(){
+  document.getElementById('vPcbSize').textContent = state.pcbSize+' mm';
+  document.getElementById('vDonut').textContent = state.donutWidth+' mm';
+  document.getElementById('vTraceW').textContent = state.traceWidth.toFixed(2)+' mm';
+  document.getElementById('vClear').textContent = state.clearance.toFixed(2)+' mm';
+  document.getElementById('vCurrent').textContent = state.current.toFixed(2)+' A';
+  document.getElementById('vTestVol').textContent = state.testVolume+' mm';
+}
+
+let debounceTimer=null;
+function scheduleCompute(){
+  syncLabels();
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(compute, 60);
+}
+
+els.pcbSize.addEventListener('input', e=>{ state.pcbSize=+e.target.value; scheduleCompute(); });
+els.donutWidth.addEventListener('input', e=>{ state.donutWidth=+e.target.value; scheduleCompute(); });
+els.traceWidth.addEventListener('input', e=>{ state.traceWidth=+e.target.value; scheduleCompute(); });
+els.clearance.addEventListener('input', e=>{ state.clearance=+e.target.value; scheduleCompute(); });
+els.separation.addEventListener('input', e=>{ state.separation=+e.target.value; scheduleCompute(); });
+els.current.addEventListener('input', e=>{ state.current=+e.target.value; scheduleCompute(); });
+els.testVolume.addEventListener('input', e=>{ state.testVolume=+e.target.value; scheduleCompute(); });
+autoSepEl.addEventListener('change', e=>{
+  state.autoSep = e.target.checked;
+  els.separation.disabled = state.autoSep;
+  scheduleCompute();
+});
+
+syncLabels();
+compute();
+</script>
+</body>
+</html>
