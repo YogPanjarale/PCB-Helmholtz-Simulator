@@ -249,6 +249,32 @@
     display:none;
   }
   .warn-banner.show{display:block;}
+
+  .action-btn{
+    width:100%;
+    border:1px solid var(--accent);
+    background:rgba(201,121,60,.16);
+    color:var(--accent-bright);
+    border-radius:8px;
+    padding:9px 10px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    cursor:pointer;
+    transition:.15s;
+  }
+  .action-btn:hover{background:rgba(201,121,60,.24);}
+  .opt-result{
+    margin-top:10px;
+    background:var(--bg-input);
+    border:1px solid var(--border-soft);
+    border-radius:8px;
+    padding:9px 10px;
+    font-size:11.5px;
+    color:var(--text-dim);
+    line-height:1.5;
+  }
+  .opt-result.good{border-color:rgba(127,157,111,.45);color:var(--good);}
+  .opt-result.warn{border-color:rgba(210,162,74,.45);color:var(--warn);}
 </style>
 </head>
 <body>
@@ -318,7 +344,18 @@
             <span class="count" id="vLayers">2</span>
             <button onclick="step('layers',1)">+</button>
           </div>
-          <div class="field-hint">Outer 2 layers: 1 oz/ft² copper. Any inner layers: 0.5 oz/ft² (standard stackup).</div>
+          <div class="field-hint">Number of electrically active copper layers in the winding.</div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>Copper weight</span><span class="val" id="vCopperOz"></span></div>
+          <select id="copperOz" style="width:100%;padding:7px 9px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:7px;font-size:12px;cursor:pointer;">
+            <option value="1">1 oz/ft²</option>
+            <option value="2">2 oz/ft²</option>
+            <option value="3">3 oz/ft²</option>
+            <option value="4">4 oz/ft²</option>
+          </select>
+          <div class="field-hint">Applied to every simulated winding layer for resistance and IPC current sizing.</div>
         </div>
 
         <div class="field">
@@ -347,33 +384,59 @@
       </div>
 
       <div class="panel">
-        <h2>Drive current</h2>
+        <h2>Drive</h2>
 
-        <label class="checkrow">
-          <input type="checkbox" id="autoCurrent" checked>
-          Use viable best (max) current
-        </label>
-        <div class="ipc-box" id="ipcBox">–</div>
+        <div class="field">
+          <div class="field-label">Drive mode</div>
+          <select id="driveMode" onchange="setDriveMode(this.value)" style="width:100%;padding:7px 9px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:7px;font-size:12px;cursor:pointer;">
+            <option value="auto">Auto safe current</option>
+            <option value="voltage">Use drive voltage</option>
+            <option value="manual">Manual current</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>Supply voltage</span><span class="val" id="vDriveVoltage"></span></div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="number" id="driveVoltage" min="0.1" max="1000" step="0.1" value="12" style="width:90px;" onchange="setDriveVoltageFromNum()">
+            <span class="tol-input">V</span>
+          </div>
+          <div class="field-hint">With Drive mode set to Use drive voltage, optimization fixes this supply and uses I = V/R.</div>
+        </div>
+
+        <div class="ipc-box" id="ipcBox">-</div>
 
         <div class="field">
           <div class="field-label"><span>Drive current</span><span class="val" id="vCurrent"></span></div>
           <div style="display:flex; gap:6px; align-items:center;">
-            <input type="range" id="current" min="0.01" max="10" step="0.01" value="0.5" disabled style="flex:1;">
-            <input type="number" id="currentNum" min="0.01" max="10" step="0.01" value="0.5" style="width:60px;" onchange="setCurrentFromNum()" disabled>
+            <input type="range" id="current" min="0.01" max="200" step="0.01" value="0.5" disabled style="flex:1;">
+            <input type="number" id="currentNum" min="0.01" max="200" step="0.01" value="0.5" style="width:72px;" onchange="setCurrentFromNum()" disabled>
           </div>
         </div>
       </div>
 
       <div class="panel">
-        <h2>Test volume</h2>
+        <h2>Optimization target</h2>
+
         <div class="field">
-          <div class="field-label"><span>Test volume (cube edge)</span><span class="val" id="vTestVol"></span></div>
+          <div class="field-label"><span>Target magnetic field</span><span class="val" id="vTargetField"></span></div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="number" id="targetField" min="0.01" max="100000" step="0.1" value="50" style="width:90px;" onchange="setTargetFieldFromNum()">
+            <span class="tol-input">uT</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>Uniformity cube side</span><span class="val" id="vTestVol"></span></div>
           <div style="display:flex; gap:6px; align-items:center;">
             <input type="range" id="testVolume" min="10" max="600" step="1" value="80" style="flex:1;">
             <input type="number" id="testVolNum" min="10" max="600" step="1" value="80" style="width:60px;" onchange="setTestVolFromNum()">
           </div>
-          <div class="field-hint">e.g. your CubeSat envelope, centered between the two coils.</div>
+          <div class="field-hint">Centered cube used for the edge and corner uniformity checks.</div>
         </div>
+
+        <button class="action-btn" onclick="optimizeCoil()">Optimize coil</button>
+        <div class="opt-result" id="optResult">Ready. Optimizes for lowest power. In Use drive voltage mode, the supply is fixed and current is V/R.</div>
       </div>
     </div>
 
@@ -397,7 +460,7 @@
           <div class="stat"><div class="stat-label">Coil separation</div><div class="stat-value" id="oSep">–</div></div>
           <div class="stat"><div class="stat-label">Trace length (total)</div><div class="stat-value" id="oLength">–</div></div>
           <div class="stat"><div class="stat-label">Resistance</div><div class="stat-value" id="oRes">–</div></div>
-          <div class="stat"><div class="stat-label">Drive voltage</div><div class="stat-value" id="oVolt">–</div></div>
+          <div class="stat"><div class="stat-label">Coil voltage drop</div><div class="stat-value" id="oVolt">–</div></div>
           <div class="stat"><div class="stat-label">Power dissipation</div><div class="stat-value" id="oPower">–</div></div>
           <div class="stat"><div class="stat-label">Current density</div><div class="stat-value" id="oJ">–</div></div>
           <div class="stat"><div class="stat-label">Outer turn size</div><div class="stat-value" id="oOuter">–</div></div>
@@ -449,6 +512,16 @@ const SEPARATION_MIN_MM = 10;
 const SEPARATION_MAX_MM = 2500;
 const TRACE_WIDTH_MIN_MM = 0.1;
 const TRACE_WIDTH_MAX_MM = 250;
+const DONUT_WIDTH_MIN_MM = 5;
+const DONUT_WIDTH_MAX_MM = 390;
+const TEST_VOLUME_MIN_MM = 10;
+const TEST_VOLUME_MAX_MM = 600;
+const TARGET_FIELD_MIN_UT = 0.01;
+const TARGET_FIELD_MAX_UT = 100000;
+const CURRENT_MIN_A = 0.01;
+const CURRENT_MAX_A = 200;
+const DRIVE_VOLTAGE_MIN_V = 0.1;
+const DRIVE_VOLTAGE_MAX_V = 1000;
 
 function sub(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
 function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
@@ -534,8 +607,8 @@ function ipcMaxCurrent(traceWidth_mm, thickness_oz, isExternal){
   return k*Math.pow(IPC_DELTA_T,0.44)*Math.pow(A,0.725);
 }
 
-function recommendedCurrent(traceWidth_mm, numLayers){
-  const ozArr = layerThicknesses(numLayers);
+function recommendedCurrent(traceWidth_mm, numLayers, copperOz=state.copperOz){
+  const ozArr = layerThicknesses(numLayers, copperOz);
   let minI = Infinity;
   ozArr.forEach((oz,i)=>{
     const isExternal = (i===0 || i===ozArr.length-1);
@@ -553,11 +626,15 @@ let state = {
   traceWidth:0.8,
   clearance:0.3,
   layers:2,
+  copperOz:1,
   stack:1,
   sepMode:'ideal',
   separation:150,
+  driveMode:'auto',
   autoCurrent:true,
   current:0.5,
+  targetFieldMicroT:50,
+  driveVoltage:12,
   testVolume:80,
   tolPct:5
 };
@@ -567,8 +644,11 @@ const els = {};
   els[id]=document.getElementById(id);
 });
 const autoSepEl = document.getElementById('autoSep');
-const autoCurrentEl = document.getElementById('autoCurrent');
+const driveModeEl = document.getElementById('driveMode');
+const copperOzEl = document.getElementById('copperOz');
 const tolPctEl = document.getElementById('tolPct');
+const targetFieldEl = document.getElementById('targetField');
+const driveVoltageEl = document.getElementById('driveVoltage');
 
 function fmt(v,d=2){ return Number(v).toFixed(d); }
 
@@ -586,13 +666,8 @@ function generateTurnSizes(){
   return {sizes, outerDim_mm: state.shape==='square' ? 2*outerDim : outerDim, pitch};
 }
 
-function layerThicknesses(numLayers){
-  const OZ_OUTER=1.0, OZ_INNER=0.5;
-  if (numLayers<=2) return Array(numLayers).fill(OZ_OUTER);
-  const arr=[OZ_OUTER];
-  for(let i=0;i<numLayers-2;i++) arr.push(OZ_INNER);
-  arr.push(OZ_OUTER);
-  return arr;
+function layerThicknesses(numLayers, copperOz=state.copperOz){
+  return Array(numLayers).fill(copperOz);
 }
 
 function idealSeparation_mm(outerDim_mm){
@@ -618,6 +693,481 @@ function buildSideLoops(sizes, sepGap_mm, sign){
   return loops;
 }
 
+/* ============================== OPTIMIZER ============================== */
+const OPT_TRACE_WIDTHS_MM = [0.5,0.8,1.5,3,6,10,20,30,50,75,100,150,250];
+const OPT_DONUT_RATIOS = [1,0.7,0.45,0.25];
+const OPT_MAX_GROUPED_TURNS = 5;
+const OPT_GRADIENT_STARTS = 8;
+const OPT_GRADIENT_ITERS = 14;
+const OPT_GRADIENT_DELTA = 0.018;
+const OPT_GRADIENT_STEP = 0.16;
+const OPT_FIELD_TOL_PCT = 1;
+
+function clampNumber(value, min, max, fallback){
+  const n = +value;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function clamp01(value){
+  return Math.max(0, Math.min(1, value));
+}
+
+function roundToStep(value, step){
+  return Math.round(value/step)*step;
+}
+
+function uniqueSorted(values){
+  return [...new Set(values.map(v=>Math.round(v*100)/100))].sort((a,b)=>a-b);
+}
+
+function generateBoardCandidates(cubeSide_mm){
+  const tol = Math.max(0.1, state.tolPct);
+  const tolFactor = Math.max(2.2, 7/Math.sqrt(tol));
+  const factors = [1.5,2,2.5,3.2,4.2,5.5,7,9,12,tolFactor];
+  const values = [state.pcbSize, PCB_SIZE_MIN_MM, PCB_SIZE_MAX_MM];
+  factors.forEach(r=>values.push(cubeSide_mm*r));
+  return uniqueSorted(values.map(v=>roundToStep(clampNumber(v, PCB_SIZE_MIN_MM, PCB_SIZE_MAX_MM, PCB_SIZE_MIN_MM), 25)));
+}
+
+function generateTraceCandidates(){
+  return uniqueSorted(OPT_TRACE_WIDTHS_MM.concat([state.traceWidth])
+    .filter(v=>v>=TRACE_WIDTH_MIN_MM && v<=TRACE_WIDTH_MAX_MM));
+}
+
+function maxDonutForPcb(pcbSize, clearance){
+  return Math.min(DONUT_WIDTH_MAX_MM, pcbSize/2 - clearance - 0.5);
+}
+
+function generateTurnSizesFor(cfg){
+  const outerDim = cfg.pcbSize/2 - cfg.clearance;
+  const donut = Math.min(cfg.donutWidth, outerDim - 0.5);
+  const pitch = cfg.traceWidth + cfg.clearance;
+  const nTurns = Math.max(0, Math.floor(donut/pitch));
+  const sizes = [];
+  for(let i=0;i<nTurns;i++){
+    const s = cfg.shape==='square' ? 2*(outerDim - i*pitch) : (outerDim - i*pitch);
+    sizes.push(s);
+  }
+  return {sizes, outerDim_mm: cfg.shape==='square' ? 2*outerDim : outerDim, pitch};
+}
+
+function separationForConfig(cfg, sepMode, outerDim_mm){
+  if (sepMode==='ideal') return cfg.shape==='square' ? 0.5445*outerDim_mm : outerDim_mm;
+  if (sepMode==='maxstab') return 1.207*outerDim_mm;
+  return cfg.separation;
+}
+
+function compressTurnSizes(sizes, maxGroups=OPT_MAX_GROUPED_TURNS){
+  if (!maxGroups || sizes.length<=maxGroups) return sizes.map(size=>({size, mult:1}));
+  const groupSize = Math.ceil(sizes.length/maxGroups);
+  const groups = [];
+  for(let i=0;i<sizes.length;i+=groupSize){
+    const chunk = sizes.slice(i, i+groupSize);
+    const avg = chunk.reduce((sum,v)=>sum+v,0)/chunk.length;
+    groups.push({size:avg, mult:chunk.length});
+  }
+  return groups;
+}
+
+function buildSideLoopsForConfig(cfg, turns, sepGap_mm, sign){
+  const loops=[];
+  const boardThk_mm = BOARD_THICKNESS_M*1e3;
+  for(let j=0;j<cfg.stack;j++){
+    const boardZ = sign*(sepGap_mm/2 + j*boardThk_mm);
+    for(const turn of turns){
+      loops.push({points: loopPoints(cfg.shape, turn.size, boardZ), mult: turn.mult*cfg.layers});
+    }
+  }
+  return loops;
+}
+
+function loopFieldAtFast(loopPts, I, x, y, z){
+  let bx=0, by=0, bz=0;
+  for(let i=0;i<loopPts.length-1;i++){
+    const p1 = loopPts[i], p2 = loopPts[i+1];
+    const lx = p2[0]-p1[0], ly = p2[1]-p1[1], lz = p2[2]-p1[2];
+    const Llen = Math.sqrt(lx*lx + ly*ly + lz*lz);
+    if (Llen<1e-12) continue;
+    const ux = lx/Llen, uy = ly/Llen, uz = lz/Llen;
+
+    const r1x = x-p1[0], r1y = y-p1[1], r1z = z-p1[2];
+    const t = r1x*ux + r1y*uy + r1z*uz;
+    const rpx = r1x - ux*t, rpy = r1y - uy*t, rpz = r1z - uz*t;
+    const d = Math.sqrt(rpx*rpx + rpy*rpy + rpz*rpz);
+    if (d<1e-9) continue;
+
+    const r2x = x-p2[0], r2y = y-p2[1], r2z = z-p2[2];
+    const r1 = Math.sqrt(r1x*r1x + r1y*r1y + r1z*r1z);
+    const r2 = Math.sqrt(r2x*r2x + r2y*r2y + r2z*r2z);
+    if (r1<1e-12 || r2<1e-12) continue;
+    const c1 = (ux*r1x + uy*r1y + uz*r1z)/r1;
+    const c2 = (ux*r2x + uy*r2y + uz*r2z)/r2;
+
+    const dcx = uy*rpz - uz*rpy;
+    const dcy = uz*rpx - ux*rpz;
+    const dcz = ux*rpy - uy*rpx;
+    const dn = Math.sqrt(dcx*dcx + dcy*dcy + dcz*dcz);
+    if (dn<1e-12) continue;
+    const scale = (MU0*I)/(4*Math.PI*d)*(c1-c2)/dn;
+    bx += dcx*scale; by += dcy*scale; bz += dcz*scale;
+  }
+  return [bx,by,bz];
+}
+
+function fieldAtAllFast(loops, I, P){
+  let bx=0, by=0, bz=0;
+  const x=P[0], y=P[1], z=P[2];
+  for(const lp of loops){
+    const b = loopFieldAtFast(lp.points, I*lp.mult, x, y, z);
+    bx += b[0]; by += b[1]; bz += b[2];
+  }
+  return [bx,by,bz];
+}
+
+function electricalForConfig(cfg, sizes, current_A){
+  const Lper_layer_m = sizes.reduce((acc,s)=>acc+perimeter_mm(cfg.shape,s),0)*1e-3;
+  const thicknesses = layerThicknesses(cfg.layers, cfg.copperOz).map(oz=>oz*OZ_TO_M);
+  const w_m = cfg.traceWidth*1e-3;
+  let R_board = 0;
+  for(const t of thicknesses) R_board += RHO_CU * Lper_layer_m / (w_m * t);
+  const R_total = R_board * cfg.stack * 2;
+  const L_total = Lper_layer_m * cfg.layers * cfg.stack * 2;
+  const V = current_A*R_total;
+  const P = current_A*current_A*R_total;
+  const J = current_A/(w_m*thicknesses[0]) / 1e6;
+  return {R_total, L_total, V, P, J};
+}
+
+function configFromVector(v, base){
+  const pcbSize = PCB_SIZE_MIN_MM + clamp01(v[0])*(PCB_SIZE_MAX_MM-PCB_SIZE_MIN_MM);
+  const maxDonut = maxDonutForPcb(pcbSize, base.clearance);
+  if (maxDonut<DONUT_WIDTH_MIN_MM) return null;
+  const donutWidth = DONUT_WIDTH_MIN_MM + clamp01(v[1])*(maxDonut-DONUT_WIDTH_MIN_MM);
+  const maxTraceForTurns = Math.max(TRACE_WIDTH_MIN_MM, Math.min(TRACE_WIDTH_MAX_MM, donutWidth-base.clearance));
+  const traceWidth = TRACE_WIDTH_MIN_MM + clamp01(v[2])*(maxTraceForTurns-TRACE_WIDTH_MIN_MM);
+  const separation = SEPARATION_MIN_MM + clamp01(v[3])*(SEPARATION_MAX_MM-SEPARATION_MIN_MM);
+  return {...base, pcbSize, donutWidth, traceWidth, separation};
+}
+
+function vectorFromConfig(cfg, base){
+  const pcb = (cfg.pcbSize-PCB_SIZE_MIN_MM)/(PCB_SIZE_MAX_MM-PCB_SIZE_MIN_MM);
+  const maxDonut = Math.max(DONUT_WIDTH_MIN_MM, maxDonutForPcb(cfg.pcbSize, base.clearance));
+  const donut = maxDonut>DONUT_WIDTH_MIN_MM ? (cfg.donutWidth-DONUT_WIDTH_MIN_MM)/(maxDonut-DONUT_WIDTH_MIN_MM) : 1;
+  const maxTraceForTurns = Math.max(TRACE_WIDTH_MIN_MM, Math.min(TRACE_WIDTH_MAX_MM, cfg.donutWidth-base.clearance));
+  const trace = maxTraceForTurns>TRACE_WIDTH_MIN_MM ? (cfg.traceWidth-TRACE_WIDTH_MIN_MM)/(maxTraceForTurns-TRACE_WIDTH_MIN_MM) : 0;
+  const sep = (cfg.separation-SEPARATION_MIN_MM)/(SEPARATION_MAX_MM-SEPARATION_MIN_MM);
+  return [clamp01(pcb), clamp01(donut), clamp01(trace), clamp01(sep)];
+}
+
+function separationSeedValues(cfg){
+  const {outerDim_mm} = generateTurnSizesFor(cfg);
+  const ideal = separationForConfig(cfg, 'ideal', outerDim_mm);
+  const maxstab = separationForConfig(cfg, 'maxstab', outerDim_mm);
+  return uniqueSorted([state.separation, ideal, maxstab, ideal*0.7, ideal*1.4]
+    .map(v=>clampNumber(v, SEPARATION_MIN_MM, SEPARATION_MAX_MM, ideal)));
+}
+
+function optimizerCandidateIsBetter(candidate, best){
+  if (!best) return true;
+  if (candidate.feasible !== best.feasible) return candidate.feasible;
+  if (!candidate.feasible) return candidate.score < best.score;
+
+  const powerDiff = candidate.electrical.P - best.electrical.P;
+  const powerEpsilon = Math.max(1e-6, best.electrical.P*0.002);
+  if (Math.abs(powerDiff)>powerEpsilon) return powerDiff<0;
+
+  const fieldDiff = candidate.fieldErrorPct - best.fieldErrorPct;
+  if (Math.abs(fieldDiff)>0.02) return fieldDiff<0;
+
+  const uniformityDiff = candidate.worstAbsDev - best.worstAbsDev;
+  if (Math.abs(uniformityDiff)>0.02) return uniformityDiff<0;
+
+  return candidate.cfg.pcbSize < best.cfg.pcbSize;
+}
+
+function evaluateOptimizerCandidate(cfg, sepMode, target_T, maxGroups=OPT_MAX_GROUPED_TURNS){
+  const {sizes, outerDim_mm, pitch} = generateTurnSizesFor(cfg);
+  if (sizes.length===0) return null;
+  const sepGap = separationForConfig(cfg, sepMode, outerDim_mm);
+  if (sepGap<SEPARATION_MIN_MM || sepGap>SEPARATION_MAX_MM) return null;
+
+  const turns = compressTurnSizes(sizes, maxGroups);
+  const loopsTop = buildSideLoopsForConfig(cfg, turns, sepGap, +1);
+  const loopsBot = buildSideLoopsForConfig(cfg, turns, sepGap, -1);
+  const allLoops = loopsTop.concat(loopsBot);
+  const BmagPerA = vnorm(fieldAtAllFast(allLoops, 1, [0,0,0]));
+  if (!Number.isFinite(BmagPerA) || BmagPerA<=0) return null;
+
+  const half_m = cfg.testVolume/2*1e-3;
+  const devAt = (P)=>{
+    const B = fieldAtAllFast(allLoops, 1, P);
+    return BmagPerA>0 ? (vnorm(B)-BmagPerA)/BmagPerA*100 : 0;
+  };
+  const devTrans = devAt([half_m,0,0]);
+  const devAxial = devAt([0,0,half_m]);
+  const devCorner = devAt([half_m,half_m,half_m]);
+  const worstAbsDev = Math.max(Math.abs(devTrans), Math.abs(devAxial), Math.abs(devCorner));
+
+  const ipc = recommendedCurrent(cfg.traceWidth, cfg.layers, cfg.copperOz);
+  const fixedSupplyVoltage = cfg.driveMode==='voltage';
+  const electricalAt1A = electricalForConfig(cfg, sizes, 1);
+  const rawDirectSupplyCurrent = electricalAt1A.R_total>0 ? cfg.driveVoltage/electricalAt1A.R_total : CURRENT_MAX_A;
+  const directSupplyCurrent = Number.isFinite(rawDirectSupplyCurrent) ? Math.max(0, rawDirectSupplyCurrent) : CURRENT_MAX_A;
+  const voltageCurrentLimit = directSupplyCurrent;
+  const thermalCurrentLimit = Math.max(CURRENT_MIN_A, Math.min(ipc.safe, CURRENT_MAX_A));
+  const currentLimit = fixedSupplyVoltage ? thermalCurrentLimit : Math.max(CURRENT_MIN_A, Math.min(thermalCurrentLimit, voltageCurrentLimit));
+  const requiredCurrent = target_T/BmagPerA;
+  const appliedCurrent = fixedSupplyVoltage ? directSupplyCurrent : Math.min(Math.max(requiredCurrent, CURRENT_MIN_A), currentLimit);
+  const fieldAtApplied_T = BmagPerA*appliedCurrent;
+  const fieldErrorPct = Math.abs(fieldAtApplied_T-target_T)/target_T*100;
+  const electrical = electricalForConfig(cfg, sizes, appliedCurrent);
+  const requiredElectrical = electricalForConfig(cfg, sizes, requiredCurrent);
+  const fieldOk = fieldErrorPct <= OPT_FIELD_TOL_PCT;
+  const currentOk = fixedSupplyVoltage
+    ? appliedCurrent>=CURRENT_MIN_A && appliedCurrent<=thermalCurrentLimit
+    : requiredCurrent>=CURRENT_MIN_A && requiredCurrent<=currentLimit;
+  const voltageOk = fixedSupplyVoltage || requiredElectrical.V <= cfg.driveVoltage + 1e-9;
+  const uniformityOk = worstAbsDev<=cfg.tolPct;
+  const feasible = fieldOk && currentOk && voltageOk && uniformityOk;
+
+  const fieldErrorFrac = fieldErrorPct/100;
+  const uniformityExcess = Math.max(0, worstAbsDev-cfg.tolPct)/Math.max(1, cfg.tolPct);
+  const currentExcess = fixedSupplyVoltage
+    ? (appliedCurrent>thermalCurrentLimit ? (appliedCurrent-thermalCurrentLimit)/Math.max(CURRENT_MIN_A, thermalCurrentLimit) : Math.max(0, CURRENT_MIN_A-appliedCurrent)/CURRENT_MIN_A)
+    : Math.max(0, requiredCurrent-currentLimit)/Math.max(CURRENT_MIN_A, currentLimit);
+  const voltageExcess = fixedSupplyVoltage ? 0 : Math.max(0, requiredElectrical.V-cfg.driveVoltage)/Math.max(DRIVE_VOLTAGE_MIN_V, cfg.driveVoltage);
+  const missPenalty = fieldErrorFrac*fieldErrorFrac*1e7 + uniformityExcess*uniformityExcess*2e6 + currentExcess*currentExcess*2e6 + voltageExcess*voltageExcess*2e6;
+  const feasibleScore = electrical.P + worstAbsDev*1e-4 + cfg.pcbSize*1e-7;
+  const score = feasible ? feasibleScore : 1e9 + missPenalty + electrical.P;
+
+  return {
+    cfg, sepMode, sepGap, outerDim_mm, pitch, turnsPerLayer:sizes.length,
+    BmagPerA, requiredCurrent, appliedCurrent, currentLimit, thermalCurrentLimit, voltageCurrentLimit, fixedSupplyVoltage, directSupplyCurrent,
+    requiredVoltage:requiredElectrical.V, fieldAtApplied_T,
+    fieldErrorPct, fieldOk, currentOk, voltageOk, uniformityOk, feasible,
+    devTrans, devAxial, devCorner, worstAbsDev, electrical, score
+  };
+}
+
+function evaluateVector(v, base, target_T, maxGroups=OPT_MAX_GROUPED_TURNS){
+  const cfg = configFromVector(v, base);
+  if (!cfg) return null;
+  return evaluateOptimizerCandidate(cfg, 'manual', target_T, maxGroups);
+}
+
+function objectiveForVector(v, base, target_T){
+  const candidate = evaluateVector(v, base, target_T);
+  return candidate ? candidate.score : 1e15;
+}
+
+function generateOptimizerSeeds(base){
+  const seeds = [];
+  const addSeed = (cfg)=>{
+    const vec = vectorFromConfig(cfg, base);
+    const key = vec.map(v=>v.toFixed(3)).join(',');
+    if (!seeds.some(s=>s.key===key)) seeds.push({key, vec});
+  };
+
+  addSeed({...base, pcbSize:state.pcbSize, donutWidth:state.donutWidth, traceWidth:state.traceWidth, separation:state.separation});
+
+  const boards = generateBoardCandidates(base.testVolume);
+  const traces = generateTraceCandidates();
+  for(const pcbSize of boards){
+    const maxDonut = maxDonutForPcb(pcbSize, base.clearance);
+    if (maxDonut<DONUT_WIDTH_MIN_MM) continue;
+    for(const ratio of OPT_DONUT_RATIOS){
+      const donutWidth = DONUT_WIDTH_MIN_MM + ratio*(maxDonut-DONUT_WIDTH_MIN_MM);
+      const maxTrace = Math.max(TRACE_WIDTH_MIN_MM, Math.min(TRACE_WIDTH_MAX_MM, donutWidth-base.clearance));
+      for(const trace of traces){
+        if (trace>maxTrace) continue;
+        const cfg = {...base, pcbSize, donutWidth, traceWidth:trace, separation:state.separation};
+        for(const separation of separationSeedValues(cfg)) addSeed({...cfg, separation});
+      }
+    }
+  }
+  return seeds.map(s=>s.vec);
+}
+
+function gradientDescentFrom(seed, base, target_T){
+  let x = seed.slice();
+  let currentObj = objectiveForVector(x, base, target_T);
+  let best = evaluateVector(x, base, target_T);
+  let evals = 1;
+  let step = OPT_GRADIENT_STEP;
+
+  for(let iter=0; iter<OPT_GRADIENT_ITERS && step>0.004; iter++){
+    const grad = [];
+    for(let i=0;i<x.length;i++){
+      const xp = x.slice(), xm = x.slice();
+      xp[i] = clamp01(xp[i]+OPT_GRADIENT_DELTA);
+      xm[i] = clamp01(xm[i]-OPT_GRADIENT_DELTA);
+      const op = objectiveForVector(xp, base, target_T);
+      const om = objectiveForVector(xm, base, target_T);
+      grad.push((op-om)/(2*OPT_GRADIENT_DELTA));
+      evals += 2;
+    }
+
+    const norm = Math.sqrt(grad.reduce((sum,g)=>sum+(Number.isFinite(g)?g*g:0),0));
+    let accepted = false;
+    if (Number.isFinite(norm) && norm>1e-9){
+      const trial = x.map((v,i)=>clamp01(v - step*grad[i]/norm));
+      const obj = objectiveForVector(trial, base, target_T);
+      evals++;
+      if (obj<currentObj){
+        x = trial;
+        currentObj = obj;
+        accepted = true;
+      }
+    }
+
+    if (!accepted){
+      let bestTrial = x;
+      let bestObj = currentObj;
+      for(let i=0;i<x.length;i++){
+        for(const dir of [-1,1]){
+          const trial = x.slice();
+          trial[i] = clamp01(trial[i]+dir*step);
+          const obj = objectiveForVector(trial, base, target_T);
+          evals++;
+          if (obj<bestObj){
+            bestObj = obj;
+            bestTrial = trial;
+          }
+        }
+      }
+      if (bestObj<currentObj){
+        x = bestTrial;
+        currentObj = bestObj;
+        accepted = true;
+      }
+    }
+
+    const candidate = evaluateVector(x, base, target_T);
+    evals++;
+    if (candidate && optimizerCandidateIsBetter(candidate, best)) best = candidate;
+    if (!accepted) step *= 0.55;
+  }
+
+  return {candidate:best, evals};
+}
+
+function optimizeCoil(){
+  state.targetFieldMicroT = clampNumber(targetFieldEl.value, TARGET_FIELD_MIN_UT, TARGET_FIELD_MAX_UT, 50);
+  state.driveVoltage = clampNumber(driveVoltageEl.value, DRIVE_VOLTAGE_MIN_V, DRIVE_VOLTAGE_MAX_V, 12);
+  state.testVolume = clampNumber(document.getElementById('testVolNum').value, TEST_VOLUME_MIN_MM, TEST_VOLUME_MAX_MM, 80);
+  els.testVolume.value = state.testVolume;
+  syncLabels();
+  clearTimeout(debounceTimer);
+  const resultEl = document.getElementById('optResult');
+  resultEl.className = 'opt-result';
+  resultEl.textContent = 'Running multi-parameter gradient optimizer...';
+  setTimeout(runOptimizationSearch, 0);
+}
+
+function runOptimizationSearch(){
+  const resultEl = document.getElementById('optResult');
+  const target_T = state.targetFieldMicroT*1e-6;
+  if (!Number.isFinite(target_T) || target_T<=0){
+    resultEl.className = 'opt-result warn';
+    resultEl.textContent = 'Enter a positive target magnetic field.';
+    return;
+  }
+
+  const base = {
+    shape:state.shape,
+    layers:state.layers,
+    copperOz:state.copperOz,
+    stack:state.stack,
+    clearance:state.clearance,
+    driveVoltage:state.driveVoltage,
+    driveMode:state.driveMode,
+    testVolume:state.testVolume,
+    tolPct:state.tolPct
+  };
+
+  const seedVectors = generateOptimizerSeeds(base);
+  const rankedSeeds = [];
+  let checked = 0;
+  let best = null;
+  for(const seed of seedVectors){
+    const candidate = evaluateVector(seed, base, target_T);
+    checked++;
+    if (!candidate) continue;
+    rankedSeeds.push({seed, candidate});
+    if (optimizerCandidateIsBetter(candidate, best)) best = candidate;
+  }
+
+  rankedSeeds.sort((a,b)=>a.candidate.score-b.candidate.score);
+  const starts = rankedSeeds.slice(0, OPT_GRADIENT_STARTS);
+  for(const start of starts){
+    const result = gradientDescentFrom(start.seed, base, target_T);
+    checked += result.evals;
+    if (result.candidate && optimizerCandidateIsBetter(result.candidate, best)) best = result.candidate;
+  }
+
+  if (!best){
+    resultEl.className = 'opt-result warn';
+    resultEl.textContent = 'No usable winding found inside the current limits.';
+    return;
+  }
+
+  const refined = evaluateOptimizerCandidate(best.cfg, 'manual', target_T, 0) || best;
+  applyOptimizerResult(refined, checked);
+}
+
+function applyOptimizerResult(best, checked){
+  state.pcbSize = Math.round(best.cfg.pcbSize);
+  state.donutWidth = Math.round(best.cfg.donutWidth);
+  state.traceWidth = roundToStep(best.cfg.traceWidth, 0.05);
+  state.sepMode = 'manual';
+  state.separation = Math.round(best.sepGap);
+  state.driveMode = best.fixedSupplyVoltage ? 'voltage' : 'manual';
+  state.autoCurrent = false;
+  state.current = Math.max(CURRENT_MIN_A, roundToStep(best.appliedCurrent, 0.01));
+
+  document.getElementById('sepMode').value = state.sepMode;
+  driveModeEl.value = state.driveMode;
+  els.current.disabled = state.driveMode!=='manual';
+  document.getElementById('currentNum').disabled = state.driveMode!=='manual';
+
+  els.pcbSize.value = state.pcbSize;
+  document.getElementById('donutWidth').value = state.donutWidth;
+  els.traceWidth.value = state.traceWidth;
+  els.separation.value = state.separation;
+  els.current.value = state.current;
+
+  syncLabels();
+  compute();
+  renderOptimizationResult(best, checked);
+}
+
+function renderOptimizationResult(best, checked){
+  const resultEl = document.getElementById('optResult');
+  const field_uT = best.fieldAtApplied_T*1e6;
+  const notes = [];
+  if (!best.fieldOk) notes.push(`field error ${fmt(best.fieldErrorPct,2)}% exceeds +/-${fmt(OPT_FIELD_TOL_PCT,1)}%`);
+  if (!best.currentOk){
+    if (best.fixedSupplyVoltage) notes.push(`fixed ${fmt(best.cfg.driveVoltage,2)} V draws ${fmt(best.appliedCurrent,2)} A, safe cap is ${fmt(best.currentLimit,2)} A`);
+    else notes.push(`needs ${fmt(best.requiredCurrent,2)} A, cap is ${fmt(best.currentLimit,2)} A`);
+  }
+  if (!best.voltageOk) notes.push(`needs ${fmt(best.requiredVoltage,2)} V, available is ${fmt(best.cfg.driveVoltage,2)} V`);
+  if (!best.uniformityOk) notes.push(`uniformity ${fmt(best.worstAbsDev,2)}% exceeds +/-${fmt(best.cfg.tolPct,1)}%`);
+  const resultTitle = best.fixedSupplyVoltage
+    ? (best.feasible ? 'Fixed-supply gradient result' : 'Closest fixed-supply fit')
+    : (best.feasible ? 'Lowest-power gradient result' : 'Closest gradient fit');
+  const driveText = best.fixedSupplyVoltage
+    ? `fixed ${fmt(best.cfg.driveVoltage,2)} V supply, current ${fmt(state.current,2)} A`
+    : `current ${fmt(state.current,2)} A, ${fmt(best.electrical.V,2)} V coil drop (${fmt(best.cfg.driveVoltage,2)} V available)`;
+  resultEl.className = best.feasible ? 'opt-result good' : 'opt-result warn';
+  resultEl.innerHTML =
+    `${resultTitle} from ${checked} evaluations: `+
+    `${fmt(field_uT,2)} uT, ${fmt(best.fieldErrorPct,1)}% field error, `+
+    `${fmt(best.worstAbsDev,2)}% worst cube deviation, ${fmt(best.electrical.P,2)} W.<br>`+
+    `PCB ${fmt(state.pcbSize,0)} mm, donut ${fmt(state.donutWidth,0)} mm, trace ${fmt(state.traceWidth,2)} mm, `+
+    `${driveText}, manual separation ${fmt(best.sepGap,1)} mm.`+
+    `${notes.length ? '<br>'+notes.join('; ') : ''}`;
+}
 /* ============================== SVG PREVIEW ============================== */
 function renderSvg(sizes, outerDim_mm){
   const vb = 220;
@@ -651,14 +1201,16 @@ function compute(){
   }
 
   // --- IPC-2221 current sizing ---
-  const ipc = recommendedCurrent(state.traceWidth, state.layers);
+  const ipc = recommendedCurrent(state.traceWidth, state.layers, state.copperOz);
   document.getElementById('ipcBox').innerHTML =
     `IPC-2221 rated max (ΔT=${IPC_DELTA_T}°C, worst layer): <b>${fmt(ipc.ipcMax,2)} A</b><br>`+
     `Recommended (${Math.round(IPC_SAFETY_FRACTION*100)}% derated, low self-heating): <b>${fmt(ipc.safe,2)} A</b>`;
-  if (state.autoCurrent){
-    state.current = ipc.safe;
-    els.current.value = Math.min(ipc.safe, +els.current.max);
+  if (state.driveMode==='auto'){
+    state.current = Math.min(ipc.safe, CURRENT_MAX_A);
+    els.current.value = state.current;
+    state.autoCurrent = true;
     document.getElementById('vCurrent').textContent = fmt(state.current,2)+' A (auto)';
+    document.getElementById('currentNum').value = state.current.toFixed(2);
   }
 
   let sepGap = state.separation;
@@ -682,6 +1234,20 @@ function compute(){
   const loopsBot = buildSideLoops(sizes, sepGap, -1);
   const allLoops = loopsTop.concat(loopsBot);
 
+  if (state.driveMode==='voltage'){
+    const R_for_drive = electricalForConfig(state, sizes, 1).R_total;
+    const voltageCurrent = R_for_drive>0 ? state.driveVoltage/R_for_drive : CURRENT_MAX_A;
+    state.current = Number.isFinite(voltageCurrent) ? Math.max(CURRENT_MIN_A, voltageCurrent) : CURRENT_MAX_A;
+    const currentCtrlMax = Math.max(CURRENT_MAX_A, Math.ceil(state.current));
+    els.current.max = currentCtrlMax;
+    document.getElementById('currentNum').max = currentCtrlMax;
+    els.current.value = state.current;
+    document.getElementById('currentNum').value = state.current.toFixed(2);
+    document.getElementById('vCurrent').textContent = fmt(state.current,2)+' A (voltage)';
+  } else if (state.driveMode==='manual'){
+    document.getElementById('vCurrent').textContent = fmt(state.current,2)+' A';
+  }
+
   const I = state.current;
 
   // --- B field at center (single axis value; off-axis components ~0 by symmetry) ---
@@ -690,7 +1256,7 @@ function compute(){
 
   // --- electrical ---
   const Lper_layer_m = sizes.reduce((acc,s)=>acc+perimeter_mm(state.shape,s),0)*1e-3;
-  const thicknesses = layerThicknesses(state.layers).map(oz=>oz*OZ_TO_M);
+  const thicknesses = layerThicknesses(state.layers, state.copperOz).map(oz=>oz*OZ_TO_M);
   const w_m = state.traceWidth*1e-3;
   let R_board = 0;
   for(const t of thicknesses){
@@ -738,7 +1304,7 @@ function compute(){
     Turns per coil (all layers × boards): <b>${turnsPerCoil}</b><br>
     Winding pitch: <b>${fmt(pitch,2)} mm</b><br>
     Outer turn ${state.shape==='square'?'side':'radius'}: <b>${fmt(outerDim_mm,1)} mm</b><br>
-    Layer copper (oz/ft²): <b>${layerThicknesses(state.layers).join(' / ')}</b><br>
+    Layer copper (oz/ft&sup2;): <b>${layerThicknesses(state.layers, state.copperOz).join(' / ')}</b><br>
     Board stack thickness/side: <b>${fmt(state.stack*1.6,2)} mm</b>
   `;
 
@@ -1048,7 +1614,7 @@ function setPcbSizeFromNum(){
 }
 
 function setDonutWidthFromNum(){
-  state.donutWidth = Math.max(5, Math.min(390, +document.getElementById('donutWidthNum').value || 60));
+  state.donutWidth = Math.max(DONUT_WIDTH_MIN_MM, Math.min(DONUT_WIDTH_MAX_MM, +document.getElementById('donutWidthNum').value || 60));
   document.getElementById('donutWidth').value = state.donutWidth;
   scheduleCompute();
 }
@@ -1065,14 +1631,36 @@ function setClearanceFromNum(){
   scheduleCompute();
 }
 
+function setTargetFieldFromNum(){
+  state.targetFieldMicroT = Math.max(TARGET_FIELD_MIN_UT, Math.min(TARGET_FIELD_MAX_UT, +targetFieldEl.value || 50));
+  syncLabels();
+}
+
+function setDriveMode(mode){
+  state.driveMode = ['auto','voltage','manual'].includes(mode) ? mode : 'auto';
+  state.autoCurrent = state.driveMode==='auto';
+  scheduleCompute();
+}
+
+function setCopperOz(value){
+  state.copperOz = Math.round(clampNumber(value, 1, 4, 1));
+  copperOzEl.value = state.copperOz;
+  scheduleCompute();
+}
+
+function setDriveVoltageFromNum(){
+  state.driveVoltage = Math.max(DRIVE_VOLTAGE_MIN_V, Math.min(DRIVE_VOLTAGE_MAX_V, +driveVoltageEl.value || 12));
+  scheduleCompute();
+}
+
 function setCurrentFromNum(){
-  state.current = Math.max(0.01, Math.min(10, +document.getElementById('currentNum').value || 0.5));
+  state.current = Math.max(CURRENT_MIN_A, Math.min(CURRENT_MAX_A, +document.getElementById('currentNum').value || 0.5));
   els.current.value = state.current;
   scheduleCompute();
 }
 
 function setTestVolFromNum(){
-  state.testVolume = Math.max(10, Math.min(600, +document.getElementById('testVolNum').value || 80));
+  state.testVolume = Math.max(TEST_VOLUME_MIN_MM, Math.min(TEST_VOLUME_MAX_MM, +document.getElementById('testVolNum').value || 80));
   els.testVolume.value = state.testVolume;
   scheduleCompute();
 }
@@ -1089,6 +1677,12 @@ function step(key,dir){
 }
 
 function syncLabels(){
+  document.getElementById('vTargetField').textContent = fmt(state.targetFieldMicroT,2)+' uT';
+  targetFieldEl.value = state.targetFieldMicroT;
+  document.getElementById('vDriveVoltage').textContent = fmt(state.driveVoltage,1)+' V';
+  driveVoltageEl.value = state.driveVoltage;
+  document.getElementById('vCopperOz').textContent = state.copperOz+' oz/ft²';
+  copperOzEl.value = state.copperOz;
   document.getElementById('vPcbSize').textContent = state.pcbSize+' mm';
   document.getElementById('pcbSizeNum').value = state.pcbSize;
   document.getElementById('vDonut').textContent = state.donutWidth+' mm';
@@ -1097,10 +1691,16 @@ function syncLabels(){
   document.getElementById('traceWidthNum').value = state.traceWidth.toFixed(2);
   document.getElementById('vClear').textContent = state.clearance.toFixed(2)+' mm';
   document.getElementById('clearanceNum').value = state.clearance.toFixed(2);
-  if (!state.autoCurrent){
-    document.getElementById('vCurrent').textContent = state.current.toFixed(2)+' A';
-    document.getElementById('currentNum').value = state.current.toFixed(2);
-  }
+  driveModeEl.value = state.driveMode;
+  state.autoCurrent = state.driveMode==='auto';
+  const currentCtrlMax = state.driveMode==='voltage' ? Math.max(CURRENT_MAX_A, Math.ceil(state.current)) : CURRENT_MAX_A;
+  els.current.max = currentCtrlMax;
+  document.getElementById('currentNum').max = currentCtrlMax;
+  const currentIsManual = state.driveMode==='manual';
+  els.current.disabled = !currentIsManual;
+  document.getElementById('currentNum').disabled = !currentIsManual;
+  document.getElementById('vCurrent').textContent = state.current.toFixed(2)+' A'+(state.driveMode==='auto'?' (auto)':state.driveMode==='voltage'?' (voltage)':'');
+  document.getElementById('currentNum').value = state.current.toFixed(2);
   document.getElementById('vTestVol').textContent = state.testVolume+' mm';
   document.getElementById('testVolNum').value = state.testVolume;
 }
@@ -1119,13 +1719,11 @@ els.clearance.addEventListener('input', e=>{ state.clearance=+e.target.value; do
 els.separation.addEventListener('input', e=>{ state.separation=+e.target.value; document.getElementById('sepNum').value=state.separation; scheduleCompute(); });
 els.current.addEventListener('input', e=>{ state.current=+e.target.value; document.getElementById('currentNum').value=state.current.toFixed(2); scheduleCompute(); });
 els.testVolume.addEventListener('input', e=>{ state.testVolume=+e.target.value; document.getElementById('testVolNum').value=state.testVolume; scheduleCompute(); });
+targetFieldEl.addEventListener('input', e=>{ state.targetFieldMicroT = clampNumber(e.target.value, TARGET_FIELD_MIN_UT, TARGET_FIELD_MAX_UT, 50); syncLabels(); });
+driveVoltageEl.addEventListener('input', e=>{ state.driveVoltage = clampNumber(e.target.value, DRIVE_VOLTAGE_MIN_V, DRIVE_VOLTAGE_MAX_V, 12); scheduleCompute(); });
 tolPctEl.addEventListener('input', e=>{ state.tolPct = Math.max(0.01,+e.target.value||5); render3D(); });
-autoCurrentEl.addEventListener('change', e=>{
-  state.autoCurrent = e.target.checked;
-  els.current.disabled = state.autoCurrent;
-  document.getElementById('currentNum').disabled = state.autoCurrent;
-  scheduleCompute();
-});
+copperOzEl.addEventListener('change', e=>setCopperOz(e.target.value));
+driveModeEl.addEventListener('change', e=>setDriveMode(e.target.value));
 
 syncLabels();
 compute();
