@@ -1,6 +1,6 @@
-# PCB Helmholtz Coil Designer
+# PCB Coil Designer
 
-A single-file browser tool for designing PCB-based Helmholtz coil pairs. It lets you vary the board geometry, copper stackup, drive conditions, and target field, then recalculates magnetic field strength, field uniformity, resistance, voltage drop, current density, and power.
+A single-file browser tool for designing PCB-based Helmholtz coil pairs and single-coil PCB magnetorquers. It lets you vary the board geometry, copper stackup, drive conditions, and target field, then recalculates magnetic field strength, field uniformity, resistance, voltage drop, current density, power, and magnetic dipole moment.
 
 The app is intended for quick design exploration of ground-test magnetic-field rigs, such as ACS or magnetometer calibration fixtures.
 
@@ -12,12 +12,13 @@ No build step, package install, or server is required. The app is plain HTML, CS
 
 ## Main Features
 
-- Circular or square PCB Helmholtz coil geometry.
+- Helmholtz pair and single-coil magnetorquer modes.
+- Circular or square PCB coil geometry.
 - PCB outer size up to 2000 mm.
 - Trace width up to 250 mm.
 - Manual, ideal Helmholtz, and max-stability coil separation modes.
 - Copper layer count from 1 to 16 active winding layers per PCB.
-- PCB stack count from 1 to 10 boards per side.
+- PCB stack count from 1 to 10 boards per side or per magnetorquer coil.
 - Copper weight selector: 1, 2, 3, or 4 oz/ft^2.
 - Drive modes for automatic safe current, fixed supply voltage, or manual current.
 - Target magnetic field input for optimization.
@@ -28,16 +29,17 @@ No build step, package install, or server is required. The app is plain HTML, CS
 
 ## Basic Workflow
 
-1. Choose the coil shape: circular or square.
-2. Set the PCB outer size, winding width, trace width, and clearance.
-3. Set the number of copper layers, PCB stack count, and copper weight.
-4. Choose a coil separation mode.
-5. Choose the drive mode:
+1. Choose Helmholtz pair or magnetorquer mode.
+2. Choose the coil shape: circular or square.
+3. Set the PCB outer size, winding width, trace width, and clearance.
+4. Set the number of copper layers, PCB stack count, and copper weight.
+5. For a Helmholtz pair, choose a coil separation mode.
+6. Choose the drive mode:
    - `Auto safe current`: uses the derated IPC-2221 current estimate.
    - `Use drive voltage`: fixes the supply voltage and calculates current from `I = V / R`.
    - `Manual current`: lets you directly enter the drive current.
-6. Set the test volume and tolerance band to inspect field uniformity.
-7. Use the outputs and plots to evaluate the design.
+7. Set the test volume and tolerance band to inspect field uniformity.
+8. Use the outputs and plots to evaluate the design. Magnetorquer mode also reports magnetic dipole moment in A m^2.
 
 ## Optimizer
 
@@ -46,9 +48,9 @@ The optimizer searches over multiple design parameters:
 - PCB outer size
 - winding width
 - trace width
-- manual coil separation
+- manual coil separation (Helmholtz mode only)
 
-It uses the selected shape, copper layers, copper weight, board stack count, clearance, supply voltage, target magnetic field, and uniformity cube side.
+It uses the selected design mode, shape, copper layers, copper weight, board stack count, clearance, supply voltage, target magnetic field, and uniformity cube side. Coil separation is optimized only for a Helmholtz pair.
 
 The drive mode changes how voltage is handled during optimization:
 
@@ -62,7 +64,7 @@ The optimizer is configured to prefer the lowest-power solution that satisfies:
 - thermal current limit
 - voltage constraint from the selected drive mode
 
-After an optimization run, the app applies the result to the controls and switches the design to manual separation. It keeps voltage drive mode when the supply voltage is fixed.
+After an optimization run, the app applies the result to the controls. A Helmholtz result switches to manual separation; separation does not apply to a magnetorquer. The app keeps voltage drive mode when the supply voltage is fixed.
 
 ## Supply Voltage vs Coil Voltage Drop
 
@@ -101,7 +103,8 @@ The 3D surface view shows percentage deviation from the center field over the se
 
 ## Important Assumptions
 
-- The two coil sides are symmetric.
+- Helmholtz mode uses two symmetric coil sides.
+- Magnetorquer mode uses one PCB stack centered on the field origin.
 - Each PCB in a stack is treated as 1.6 mm thick.
 - Winding layers on the same PCB are treated as geometrically coincident for field contribution.
 - Copper pour/weight affects resistance, current density, IPC current sizing, and optimizer power, but not the geometric trace path.

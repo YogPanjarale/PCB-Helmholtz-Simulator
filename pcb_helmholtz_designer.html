@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PCB Helmholtz Coil Designer</title>
+<title>PCB Coil Designer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -281,15 +281,24 @@
 <div class="wrap">
   <header>
     <div class="eyebrow">Ground-test ACS calibration rig</div>
-    <h1>PCB Helmholtz Coil Designer</h1>
-    <div class="sub">Tune the trace layout and stack geometry on the left — field strength, uniformity, resistance, and drive power recompute live from a validated 3D Biot-Savart solve over the actual winding pattern. Trace current limits follow IPC-2221.</div>
+    <h1>PCB Coil Designer</h1>
+    <div class="sub">Design a Helmholtz pair or a single-coil PCB magnetorquer. Field strength, uniformity, resistance, magnetic moment, and drive power recompute live from a 3D Biot-Savart solve over the actual winding pattern.</div>
   </header>
 
   <div class="layout">
     <!-- CONTROLS -->
     <div>
       <div class="panel">
-        <h2>Coil shape & board</h2>
+        <h2>Coil configuration</h2>
+
+        <div class="field">
+          <div class="field-label">Design mode</div>
+          <div class="shape-toggle">
+            <button class="shape-btn active" id="btnHelmholtz" onclick="setDesignMode('helmholtz')">Helmholtz pair</button>
+            <button class="shape-btn" id="btnMagnetorquer" onclick="setDesignMode('magnetorquer')">Magnetorquer</button>
+          </div>
+          <div class="field-hint" id="designModeHint">Two symmetric coil stacks for a uniform calibration field.</div>
+        </div>
 
         <div class="field">
           <div class="field-label">Coil shape</div>
@@ -359,16 +368,16 @@
         </div>
 
         <div class="field">
-          <div class="field-label">PCBs stacked per side</div>
+          <div class="field-label" id="stackLabel">PCBs stacked per side</div>
           <div class="stepper">
             <button onclick="step('stack',-1)">–</button>
             <span class="count" id="vStack">1</span>
             <button onclick="step('stack',1)">+</button>
           </div>
-          <div class="field-hint">Symmetric on both sides. Each board 1.6 mm thick, stacked face to face.</div>
+          <div class="field-hint" id="stackHint">Symmetric on both sides. Each board is 1.6 mm thick and stacked face to face.</div>
         </div>
 
-        <div class="field">
+        <div class="field" id="separationField">
           <div class="field-label">Coil separation mode</div>
           <select id="sepMode" onchange="setSepMode(this.value)" style="width:100%;padding:7px 9px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:7px;font-size:12px;cursor:pointer;margin-bottom:8px;">
             <option value="ideal">Ideal Helmholtz (flattest near center)</option>
@@ -456,8 +465,8 @@
         <h2>Field at center</h2>
         <div class="stat-grid">
           <div class="stat"><div class="stat-label">B field (on-axis)</div><div class="stat-value accent" id="oBfield">–</div></div>
-          <div class="stat"><div class="stat-label">Total turns / coil</div><div class="stat-value" id="oTurns">–</div></div>
-          <div class="stat"><div class="stat-label">Coil separation</div><div class="stat-value" id="oSep">–</div></div>
+          <div class="stat"><div class="stat-label" id="turnsLabel">Total turns / coil</div><div class="stat-value" id="oTurns">–</div></div>
+          <div class="stat"><div class="stat-label" id="secondaryMetricLabel">Coil separation</div><div class="stat-value" id="oSecondary">–</div></div>
           <div class="stat"><div class="stat-label">Trace length (total)</div><div class="stat-value" id="oLength">–</div></div>
           <div class="stat"><div class="stat-label">Resistance</div><div class="stat-value" id="oRes">–</div></div>
           <div class="stat"><div class="stat-label">Coil voltage drop</div><div class="stat-value" id="oVolt">–</div></div>
@@ -620,6 +629,7 @@ function recommendedCurrent(traceWidth_mm, numLayers, copperOz=state.copperOz){
 
 /* ============================== STATE ============================== */
 let state = {
+  designMode:'helmholtz',
   shape:'circle',
   pcbSize:200,
   donutWidth:60,
@@ -651,6 +661,14 @@ const targetFieldEl = document.getElementById('targetField');
 const driveVoltageEl = document.getElementById('driveVoltage');
 
 function fmt(v,d=2){ return Number(v).toFixed(d); }
+
+function isSingleCoil(cfg=state){
+  return cfg.designMode==='magnetorquer';
+}
+
+function coilCount(cfg=state){
+  return isSingleCoil(cfg) ? 1 : 2;
+}
 
 /* ============================== GEOMETRY ============================== */
 function generateTurnSizes(){
@@ -782,6 +800,48 @@ function buildSideLoopsForConfig(cfg, turns, sepGap_mm, sign){
   return loops;
 }
 
+function buildSingleCoilLoopsForConfig(cfg, turns){
+  const loops=[];
+  const boardThk_mm = BOARD_THICKNESS_M*1e3;
+  for(let j=0;j<cfg.stack;j++){
+    const boardZ = (j-(cfg.stack-1)/2)*boardThk_mm;
+    for(const turn of turns){
+      loops.push({points:loopPoints(cfg.shape, turn.size, boardZ), mult:turn.mult*cfg.layers});
+    }
+  }
+  return loops;
+}
+
+function buildAllLoopsForConfig(cfg, turns, sepGap_mm){
+  if (isSingleCoil(cfg)) return buildSingleCoilLoopsForConfig(cfg, turns);
+  return buildSideLoopsForConfig(cfg, turns, sepGap_mm, +1).concat(buildSideLoopsForConfig(cfg, turns, sepGap_mm, -1));
+}
+
+function buildSingleCoilLoops(sizes){
+  const loops=[];
+  const boardThk_mm = BOARD_THICKNESS_M*1e3;
+  for(let j=0;j<state.stack;j++){
+    const boardZ = (j-(state.stack-1)/2)*boardThk_mm;
+    for(const s of sizes){
+      loops.push({points:loopPoints(state.shape, s, boardZ), mult:state.layers});
+    }
+  }
+  return loops;
+}
+
+function buildAllLoops(sizes, sepGap_mm){
+  if (isSingleCoil()) return buildSingleCoilLoops(sizes);
+  return buildSideLoops(sizes, sepGap_mm, +1).concat(buildSideLoops(sizes, sepGap_mm, -1));
+}
+
+function magneticDipoleMoment(cfg, sizes, current_A){
+  const areaSum_m2 = sizes.reduce((sum,size)=>{
+    const dimension_m = size*1e-3;
+    return sum + (cfg.shape==='square' ? dimension_m*dimension_m : Math.PI*dimension_m*dimension_m);
+  },0);
+  return current_A*cfg.layers*cfg.stack*areaSum_m2;
+}
+
 function loopFieldAtFast(loopPts, I, x, y, z){
   let bx=0, by=0, bz=0;
   for(let i=0;i<loopPts.length-1;i++){
@@ -831,8 +891,8 @@ function electricalForConfig(cfg, sizes, current_A){
   const w_m = cfg.traceWidth*1e-3;
   let R_board = 0;
   for(const t of thicknesses) R_board += RHO_CU * Lper_layer_m / (w_m * t);
-  const R_total = R_board * cfg.stack * 2;
-  const L_total = Lper_layer_m * cfg.layers * cfg.stack * 2;
+  const R_total = R_board * cfg.stack * coilCount(cfg);
+  const L_total = Lper_layer_m * cfg.layers * cfg.stack * coilCount(cfg);
   const V = current_A*R_total;
   const P = current_A*current_A*R_total;
   const J = current_A/(w_m*thicknesses[0]) / 1e6;
@@ -861,6 +921,7 @@ function vectorFromConfig(cfg, base){
 }
 
 function separationSeedValues(cfg){
+  if (isSingleCoil(cfg)) return [state.separation];
   const {outerDim_mm} = generateTurnSizesFor(cfg);
   const ideal = separationForConfig(cfg, 'ideal', outerDim_mm);
   const maxstab = separationForConfig(cfg, 'maxstab', outerDim_mm);
@@ -889,13 +950,11 @@ function optimizerCandidateIsBetter(candidate, best){
 function evaluateOptimizerCandidate(cfg, sepMode, target_T, maxGroups=OPT_MAX_GROUPED_TURNS){
   const {sizes, outerDim_mm, pitch} = generateTurnSizesFor(cfg);
   if (sizes.length===0) return null;
-  const sepGap = separationForConfig(cfg, sepMode, outerDim_mm);
-  if (sepGap<SEPARATION_MIN_MM || sepGap>SEPARATION_MAX_MM) return null;
+  const sepGap = isSingleCoil(cfg) ? 0 : separationForConfig(cfg, sepMode, outerDim_mm);
+  if (!isSingleCoil(cfg) && (sepGap<SEPARATION_MIN_MM || sepGap>SEPARATION_MAX_MM)) return null;
 
   const turns = compressTurnSizes(sizes, maxGroups);
-  const loopsTop = buildSideLoopsForConfig(cfg, turns, sepGap, +1);
-  const loopsBot = buildSideLoopsForConfig(cfg, turns, sepGap, -1);
-  const allLoops = loopsTop.concat(loopsBot);
+  const allLoops = buildAllLoopsForConfig(cfg, turns, sepGap);
   const BmagPerA = vnorm(fieldAtAllFast(allLoops, 1, [0,0,0]));
   if (!Number.isFinite(BmagPerA) || BmagPerA<=0) return null;
 
@@ -1075,6 +1134,7 @@ function runOptimizationSearch(){
   }
 
   const base = {
+    designMode:state.designMode,
     shape:state.shape,
     layers:state.layers,
     copperOz:state.copperOz,
@@ -1117,11 +1177,14 @@ function runOptimizationSearch(){
 }
 
 function applyOptimizerResult(best, checked){
-  state.pcbSize = Math.round(best.cfg.pcbSize);
-  state.donutWidth = Math.round(best.cfg.donutWidth);
-  state.traceWidth = roundToStep(best.cfg.traceWidth, 0.05);
-  state.sepMode = 'manual';
-  state.separation = Math.round(best.sepGap);
+  // Preserve the evaluated geometry; coarse UI rounding can remove a boundary turn.
+  state.pcbSize = clampNumber(best.cfg.pcbSize, PCB_SIZE_MIN_MM, PCB_SIZE_MAX_MM, state.pcbSize);
+  state.donutWidth = clampNumber(best.cfg.donutWidth, DONUT_WIDTH_MIN_MM, DONUT_WIDTH_MAX_MM, state.donutWidth);
+  state.traceWidth = clampNumber(best.cfg.traceWidth, TRACE_WIDTH_MIN_MM, TRACE_WIDTH_MAX_MM, state.traceWidth);
+  if (!isSingleCoil(best.cfg)){
+    state.sepMode = 'manual';
+    state.separation = best.sepGap;
+  }
   state.driveMode = best.fixedSupplyVoltage ? 'voltage' : 'manual';
   state.autoCurrent = false;
   state.current = Math.max(CURRENT_MIN_A, roundToStep(best.appliedCurrent, 0.01));
@@ -1159,13 +1222,16 @@ function renderOptimizationResult(best, checked){
   const driveText = best.fixedSupplyVoltage
     ? `fixed ${fmt(best.cfg.driveVoltage,2)} V supply, current ${fmt(state.current,2)} A`
     : `current ${fmt(state.current,2)} A, ${fmt(best.electrical.V,2)} V coil drop (${fmt(best.cfg.driveVoltage,2)} V available)`;
+  const geometryText = isSingleCoil(best.cfg)
+    ? 'single centered coil stack.'
+    : `manual separation ${fmt(best.sepGap,1)} mm.`;
   resultEl.className = best.feasible ? 'opt-result good' : 'opt-result warn';
   resultEl.innerHTML =
     `${resultTitle} from ${checked} evaluations: `+
     `${fmt(field_uT,2)} uT, ${fmt(best.fieldErrorPct,1)}% field error, `+
     `${fmt(best.worstAbsDev,2)}% worst cube deviation, ${fmt(best.electrical.P,2)} W.<br>`+
     `PCB ${fmt(state.pcbSize,0)} mm, donut ${fmt(state.donutWidth,0)} mm, trace ${fmt(state.traceWidth,2)} mm, `+
-    `${driveText}, manual separation ${fmt(best.sepGap,1)} mm.`+
+    `${driveText}, ${geometryText}`+
     `${notes.length ? '<br>'+notes.join('; ') : ''}`;
 }
 /* ============================== SVG PREVIEW ============================== */
@@ -1213,9 +1279,11 @@ function compute(){
     document.getElementById('currentNum').value = state.current.toFixed(2);
   }
 
-  let sepGap = state.separation;
+  let sepGap = isSingleCoil() ? 0 : state.separation;
   let sepLabel = 'mm';
-  if (state.sepMode==='ideal'){
+  if (isSingleCoil()){
+    els.separation.disabled = true;
+  } else if (state.sepMode==='ideal'){
     sepGap = idealSeparation_mm(outerDim_mm);
     sepLabel = 'mm (ideal)';
     els.separation.disabled = true;
@@ -1226,13 +1294,13 @@ function compute(){
   } else {
     els.separation.disabled = false;
   }
-  els.separation.value = sepGap;
-  document.getElementById('sepNum').value = fmt(sepGap,1);
-  document.getElementById('vSep').textContent = fmt(sepGap,1)+' '+sepLabel;
+  if (!isSingleCoil()){
+    els.separation.value = sepGap;
+    document.getElementById('sepNum').value = fmt(sepGap,1);
+    document.getElementById('vSep').textContent = fmt(sepGap,1)+' '+sepLabel;
+  }
 
-  const loopsTop = buildSideLoops(sizes, sepGap, +1);
-  const loopsBot = buildSideLoops(sizes, sepGap, -1);
-  const allLoops = loopsTop.concat(loopsBot);
+  const allLoops = buildAllLoops(sizes, sepGap);
 
   if (state.driveMode==='voltage'){
     const R_for_drive = electricalForConfig(state, sizes, 1).R_total;
@@ -1263,13 +1331,14 @@ function compute(){
     R_board += RHO_CU * Lper_layer_m / (w_m * t);
   }
   const L_board_total = Lper_layer_m * state.layers;
-  const R_total = R_board * state.stack * 2;
-  const L_total = L_board_total * state.stack * 2;
+  const R_total = R_board * state.stack * coilCount();
+  const L_total = L_board_total * state.stack * coilCount();
   const V = I*R_total;
   const P = I*I*R_total;
   const J = I/(w_m*thicknesses[0]) / 1e6; // A/mm^2 using outer-layer thickness
 
   const turnsPerCoil = sizes.length*state.layers*state.stack;
+  const dipoleMoment = magneticDipoleMoment(state, sizes, I);
 
   // --- sweeps (1D, single axis each) ---
   const half_m = state.testVolume/2*1e-3;
@@ -1305,12 +1374,14 @@ function compute(){
     Winding pitch: <b>${fmt(pitch,2)} mm</b><br>
     Outer turn ${state.shape==='square'?'side':'radius'}: <b>${fmt(outerDim_mm,1)} mm</b><br>
     Layer copper (oz/ft&sup2;): <b>${layerThicknesses(state.layers, state.copperOz).join(' / ')}</b><br>
-    Board stack thickness/side: <b>${fmt(state.stack*1.6,2)} mm</b>
+    Board stack thickness${isSingleCoil()?'':' / side'}: <b>${fmt(state.stack*1.6,2)} mm</b>
   `;
 
   document.getElementById('oBfield').innerHTML = (Bmag*1e6<1000? fmt(Bmag*1e6,2)+'<span class="unit">µT</span>' : fmt(Bmag*1e3,3)+'<span class="unit">mT</span>');
   document.getElementById('oTurns').textContent = turnsPerCoil;
-  document.getElementById('oSep').innerHTML = fmt(sepGap,1)+'<span class="unit">mm</span>';
+  document.getElementById('oSecondary').innerHTML = isSingleCoil()
+    ? fmt(dipoleMoment,4)+'<span class="unit">A&middot;m&sup2;</span>'
+    : fmt(sepGap,1)+'<span class="unit">mm</span>';
   document.getElementById('oLength').innerHTML = fmt(L_total,2)+'<span class="unit">m</span>';
   document.getElementById('oRes').innerHTML = fmt(R_total,2)+'<span class="unit">Ω</span>';
   document.getElementById('oVolt').innerHTML = fmt(V,2)+'<span class="unit">V</span>';
@@ -1589,6 +1660,11 @@ function render3D(){
 })();
 
 /* ============================== UI WIRING ============================== */
+function setDesignMode(mode){
+  state.designMode = mode==='magnetorquer' ? 'magnetorquer' : 'helmholtz';
+  scheduleCompute();
+}
+
 function setShape(s){
   state.shape=s;
   document.getElementById('btnCircle').classList.toggle('active', s==='circle');
@@ -1677,16 +1753,29 @@ function step(key,dir){
 }
 
 function syncLabels(){
+  const single = isSingleCoil();
+  document.getElementById('btnHelmholtz').classList.toggle('active', !single);
+  document.getElementById('btnMagnetorquer').classList.toggle('active', single);
+  document.getElementById('designModeHint').textContent = single
+    ? 'One centered coil stack for PCB magnetorquer design.'
+    : 'Two symmetric coil stacks for a uniform calibration field.';
+  document.getElementById('stackLabel').textContent = single ? 'PCBs stacked in coil' : 'PCBs stacked per side';
+  document.getElementById('stackHint').textContent = single
+    ? 'Boards are centered as one stack. Each board is 1.6 mm thick.'
+    : 'Symmetric on both sides. Each board is 1.6 mm thick and stacked face to face.';
+  document.getElementById('separationField').hidden = single;
+  document.getElementById('turnsLabel').textContent = single ? 'Total turns' : 'Total turns / coil';
+  document.getElementById('secondaryMetricLabel').textContent = single ? 'Magnetic dipole moment' : 'Coil separation';
   document.getElementById('vTargetField').textContent = fmt(state.targetFieldMicroT,2)+' uT';
   targetFieldEl.value = state.targetFieldMicroT;
   document.getElementById('vDriveVoltage').textContent = fmt(state.driveVoltage,1)+' V';
   driveVoltageEl.value = state.driveVoltage;
   document.getElementById('vCopperOz').textContent = state.copperOz+' oz/ft²';
   copperOzEl.value = state.copperOz;
-  document.getElementById('vPcbSize').textContent = state.pcbSize+' mm';
-  document.getElementById('pcbSizeNum').value = state.pcbSize;
-  document.getElementById('vDonut').textContent = state.donutWidth+' mm';
-  document.getElementById('donutWidthNum').value = state.donutWidth;
+  document.getElementById('vPcbSize').textContent = fmt(state.pcbSize,1)+' mm';
+  document.getElementById('pcbSizeNum').value = fmt(state.pcbSize,2);
+  document.getElementById('vDonut').textContent = fmt(state.donutWidth,1)+' mm';
+  document.getElementById('donutWidthNum').value = fmt(state.donutWidth,2);
   document.getElementById('vTraceW').textContent = state.traceWidth.toFixed(2)+' mm';
   document.getElementById('traceWidthNum').value = state.traceWidth.toFixed(2);
   document.getElementById('vClear').textContent = state.clearance.toFixed(2)+' mm';
